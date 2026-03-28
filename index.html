@@ -1,0 +1,2836 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WROK – Kretosfera</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* === CUSTOM STYLES === */
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+    * { box-sizing: border-box; }
+
+    body {
+      background: #1a2e1a;
+      font-family: 'Press Start 2P', 'Courier New', monospace;
+      user-select: none;
+      overflow-x: hidden;
+    }
+
+    /* Canvas container */
+    #canvasWrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      min-height: 400px;
+    }
+
+    #gameCanvas {
+      image-rendering: pixelated;
+      cursor: pointer;
+      border: 3px solid #4a9240;
+      border-radius: 8px;
+      box-shadow: 0 0 20px rgba(92,171,78,0.4);
+    }
+
+    /* Top bar */
+    #topbar {
+      background: linear-gradient(to bottom, #2d5a1b, #1e3d12);
+      border-bottom: 3px solid #4a9240;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .stat-badge {
+      background: rgba(0,0,0,0.4);
+      border: 2px solid #4a9240;
+      border-radius: 6px;
+      padding: 4px 10px;
+      color: #90EE90;
+      font-size: 9px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+
+    .stat-badge .val {
+      color: #FFD700;
+      font-size: 11px;
+    }
+
+    /* Right panel */
+    #rightPanel {
+      width: 220px;
+      min-width: 200px;
+      background: linear-gradient(to bottom, #1e3d12, #152c0e);
+      border-left: 3px solid #4a9240;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px;
+      overflow-y: auto;
+      max-height: calc(100vh - 120px);
+    }
+
+    .panel-title {
+      color: #90EE90;
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-bottom: 1px solid #4a9240;
+      padding-bottom: 4px;
+      margin-bottom: 4px;
+    }
+
+    /* Mound items in right panel */
+    .mound-item {
+      background: rgba(139, 105, 20, 0.3);
+      border: 2px solid #8B6914;
+      border-radius: 6px;
+      padding: 6px 8px;
+      color: #D4A017;
+      font-size: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .mound-item:hover, .mound-item.selected {
+      background: rgba(139, 105, 20, 0.6);
+      border-color: #FFD700;
+      color: #FFD700;
+    }
+
+    .mound-item.exhausted {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* Inventory slots */
+    #inventoryGrid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+    }
+
+    .inv-slot {
+      aspect-ratio: 1;
+      background: rgba(0,0,0,0.4);
+      border: 2px solid #4a9240;
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 18px;
+      transition: all 0.15s;
+      position: relative;
+      min-height: 54px;
+    }
+
+    .inv-slot:hover {
+      border-color: #FFD700;
+      background: rgba(255,215,0,0.1);
+    }
+
+    .inv-slot .item-name {
+      font-size: 5px;
+      color: #90EE90;
+      text-align: center;
+      margin-top: 2px;
+      line-height: 1.2;
+    }
+
+    .inv-slot.empty {
+      border-style: dashed;
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    /* Buttons */
+    .btn-primary {
+      background: linear-gradient(to bottom, #228B22, #1a6b1a);
+      border: 2px solid #4a9240;
+      color: #90EE90;
+      padding: 8px 14px;
+      font-family: inherit;
+      font-size: 9px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: linear-gradient(to bottom, #2ea82e, #228B22);
+      border-color: #90EE90;
+      color: #fff;
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn-finish {
+      background: linear-gradient(to bottom, #228B22, #1a6b1a);
+      border: 3px solid #90EE90;
+      color: #fff;
+      padding: 12px 20px;
+      font-family: inherit;
+      font-size: 11px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      animation: pulse-green 1.5s infinite;
+      text-align: center;
+      width: 100%;
+    }
+
+    .btn-finish:hover {
+      transform: scale(1.04);
+      box-shadow: 0 0 20px rgba(144,238,144,0.6);
+    }
+
+    @keyframes pulse-green {
+      0%, 100% { box-shadow: 0 0 8px rgba(144,238,144,0.4); }
+      50% { box-shadow: 0 0 20px rgba(144,238,144,0.8); }
+    }
+
+    /* Status bar */
+    #statusBar {
+      background: rgba(0,0,0,0.5);
+      border-top: 2px solid #4a9240;
+      padding: 6px 16px;
+      color: #90EE90;
+      font-size: 8px;
+      min-height: 28px;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    /* === MODALS === */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .modal-box {
+      background: linear-gradient(to bottom, #1e3d12, #0e1f09);
+      border: 3px solid #4a9240;
+      border-radius: 12px;
+      padding: 20px;
+      max-width: 500px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      position: relative;
+    }
+
+    .modal-title {
+      color: #FFD700;
+      font-size: 13px;
+      text-align: center;
+      margin-bottom: 16px;
+      text-shadow: 0 0 8px rgba(255,215,0,0.6);
+    }
+
+    /* Dig modal layers */
+    #digCanvas {
+      width: 100%;
+      max-width: 340px;
+      display: block;
+      margin: 0 auto;
+      border: 2px solid #4a9240;
+      border-radius: 6px;
+    }
+
+    .layer-result {
+      text-align: center;
+      font-size: 10px;
+      padding: 6px;
+      border-radius: 6px;
+      margin: 6px 0;
+      animation: fadeInUp 0.3s ease;
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .layer-result.diamond { background: rgba(0,255,255,0.1); color: #00FFFF; border: 1px solid #00FFFF; }
+    .layer-result.empty { background: rgba(100,100,100,0.1); color: #aaa; border: 1px solid #666; }
+    .layer-result.trap { background: rgba(255,0,0,0.1); color: #FF6666; border: 1px solid #FF6666; }
+    .layer-result.item { background: rgba(255,215,0,0.1); color: #FFD700; border: 1px solid #FFD700; }
+
+    /* Shop modal */
+    .shop-item-card {
+      background: rgba(0,0,0,0.4);
+      border: 2px solid #4a9240;
+      border-radius: 8px;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .shop-item-card .item-icon { font-size: 28px; }
+    .shop-item-card .item-info { flex: 1; }
+    .shop-item-card .item-info h3 { color: #FFD700; font-size: 9px; }
+    .shop-item-card .item-info p { color: #90EE90; font-size: 7px; margin-top: 2px; }
+    .shop-item-card .buy-btn {
+      background: rgba(255,215,0,0.2);
+      border: 2px solid #FFD700;
+      color: #FFD700;
+      font-family: inherit;
+      font-size: 8px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .shop-item-card .buy-btn:hover:not(:disabled) {
+      background: rgba(255,215,0,0.4);
+    }
+    .shop-item-card .buy-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* Inventory sell items in shop */
+    .sell-item-card {
+      background: rgba(0,0,0,0.2);
+      border: 1px solid #4a9240;
+      border-radius: 6px;
+      padding: 6px 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 8px;
+      color: #90EE90;
+    }
+
+    .sell-item-card .sell-btn {
+      margin-left: auto;
+      background: rgba(255,100,100,0.2);
+      border: 1px solid #FF6666;
+      color: #FF6666;
+      font-family: inherit;
+      font-size: 7px;
+      padding: 3px 6px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    /* Level end modal */
+    .score-line {
+      display: flex;
+      justify-content: space-between;
+      color: #90EE90;
+      font-size: 9px;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(74,146,64,0.3);
+    }
+
+    .score-line .val { color: #FFD700; }
+
+    /* Start screen */
+    #startScreen {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(135deg, #0d1f0d, #1a3a1a);
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+    }
+
+    .game-logo {
+      font-size: 48px;
+      color: #FFD700;
+      text-shadow: 0 0 20px rgba(255,215,0,0.8), 0 0 40px rgba(255,215,0,0.4);
+      animation: logo-pulse 2s infinite;
+    }
+
+    @keyframes logo-pulse {
+      0%, 100% { text-shadow: 0 0 20px rgba(255,215,0,0.8), 0 0 40px rgba(255,215,0,0.4); }
+      50% { text-shadow: 0 0 30px rgba(255,215,0,1), 0 0 60px rgba(255,215,0,0.6); }
+    }
+
+    .game-subtitle {
+      color: #90EE90;
+      font-size: 10px;
+      text-align: center;
+    }
+
+    .start-btn {
+      background: linear-gradient(to bottom, #228B22, #1a6b1a);
+      border: 3px solid #90EE90;
+      color: #fff;
+      font-family: inherit;
+      font-size: 14px;
+      padding: 16px 48px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 2px;
+    }
+
+    .start-btn:hover {
+      transform: scale(1.06);
+      box-shadow: 0 0 30px rgba(144,238,144,0.6);
+    }
+
+    .hs-display {
+      color: #FFD700;
+      font-size: 9px;
+      text-align: center;
+    }
+
+    /* Shovel display */
+    #shovelDisplay {
+      background: rgba(139,105,20,0.2);
+      border: 1px solid #8B6914;
+      border-radius: 6px;
+      padding: 6px;
+      font-size: 8px;
+      color: #D4A017;
+    }
+
+    /* Tooltip */
+    .tooltip {
+      position: absolute;
+      bottom: 110%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.9);
+      border: 1px solid #4a9240;
+      color: #90EE90;
+      font-size: 7px;
+      padding: 4px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+      z-index: 50;
+      pointer-events: none;
+      display: none;
+    }
+
+    .inv-slot:hover .tooltip { display: block; }
+
+    /* Power potion button */
+    #potionBtn {
+      background: rgba(0,0,200,0.2);
+      border: 2px solid #4488ff;
+      color: #88aaff;
+      font-family: inherit;
+      font-size: 8px;
+      padding: 5px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 4px;
+      transition: all 0.15s;
+    }
+
+    #potionBtn:hover:not(:disabled) {
+      background: rgba(0,0,200,0.4);
+    }
+
+    #potionBtn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* Act badge */
+    .act-badge {
+      font-size: 8px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      border: 1px solid;
+    }
+    .act-1 { background: rgba(0,200,0,0.2); border-color: #00c800; color: #90EE90; }
+    .act-2 { background: rgba(200,120,0,0.2); border-color: #c87800; color: #ffa040; }
+    .act-3 { background: rgba(200,0,0,0.2); border-color: #c80000; color: #ff8080; }
+    .act-endless { background: rgba(100,0,200,0.2); border-color: #8800ff; color: #dd88ff; }
+
+    /* Hall of Fame table */
+    .hof-table { width: 100%; border-collapse: collapse; }
+    .hof-table th {
+      color: #FFD700; font-size: 8px; padding: 5px 8px;
+      border-bottom: 2px solid #4a9240; text-align: left;
+    }
+    .hof-table td {
+      color: #90EE90; font-size: 8px; padding: 5px 8px;
+      border-bottom: 1px solid rgba(74,146,64,0.3);
+    }
+    .hof-table tr:first-child td { color: #FFD700; }
+    .hof-table tr:nth-child(2) td { color: #C0C0C0; }
+    .hof-table tr:nth-child(3) td { color: #CD7F32; }
+    .hof-table .rank { color: #FFD700; font-weight: bold; }
+    .hof-new-entry td { background: rgba(255,215,0,0.08) !important; animation: hof-glow 1s ease; }
+    @keyframes hof-glow {
+      0% { background: rgba(255,215,0,0.3); }
+      100% { background: rgba(255,215,0,0.08); }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #1a2e1a; }
+    ::-webkit-scrollbar-thumb { background: #4a9240; border-radius: 3px; }
+
+    /* Hidden class */
+    .hidden { display: none !important; }
+
+    /* Animations for act 3 status indicators */
+    .poison-active { color: #90EE90; animation: poison-blink 1s infinite; }
+    @keyframes poison-blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* Rain drops overlay for act 3 */
+    #rainOverlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 5;
+      overflow: hidden;
+    }
+
+    .raindrop {
+      position: absolute;
+      width: 2px;
+      background: linear-gradient(to bottom, transparent, rgba(100,150,255,0.6));
+      animation: fall linear infinite;
+    }
+
+    @keyframes fall {
+      from { transform: translateY(-100%); }
+      to { transform: translateY(110vh); }
+    }
+  </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+<!-- ============================================ -->
+<!-- START SCREEN -->
+<!-- ============================================ -->
+<div id="startScreen">
+  <div class="game-logo">🦔 WROK</div>
+  <div class="game-subtitle">Kretosfera – Park Monet i Kopce Tajemnic</div>
+  <div id="hsDisplay" class="hs-display">Najlepszy wynik: 0</div>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
+    <button class="start-btn" onclick="startGame()">▶ ZACZNIJ GRĘ</button>
+    <button class="start-btn" onclick="openHoFModal()" style="font-size:11px;padding:14px 28px;background:linear-gradient(to bottom,#5a4200,#3a2a00);border-color:#FFD700;color:#FFD700;">🏆 HALL OF FAME</button>
+  </div>
+  <div style="color:#666;font-size:7px;text-align:center;max-width:300px;line-height:1.8">
+    Klikaj kafelki trawy by odkrywać monety.<br>
+    Znajdź 3 monety by ukończyć poziom.<br>
+    Kop kopce kretów by zdobywać brylanty!
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- RAIN OVERLAY (Act 3) -->
+<!-- ============================================ -->
+<div id="rainOverlay" class="hidden"></div>
+
+<!-- ============================================ -->
+<!-- TOP BAR -->
+<!-- ============================================ -->
+<div id="topbar">
+  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+    <div class="stat-badge">POZIOM <span class="val" id="hbLevel">1</span></div>
+    <div class="stat-badge" id="actBadge">Akt 1</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+    <div class="stat-badge">🪙 Monety: <span class="val" id="hbCoins">0/10</span></div>
+    <div class="stat-badge">👣 Kroki: <span class="val" id="hbSteps">15</span></div>
+    <div class="stat-badge">⚡ Moc: <span class="val" id="hbPower">3</span></div>
+    <div class="stat-badge">💎 Brylanty: <span class="val" id="hbDiamonds">0</span></div>
+    <div class="stat-badge">🏆 Wynik: <span class="val" id="hbScore">0</span></div>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- MAIN AREA -->
+<!-- ============================================ -->
+<div style="display:flex;flex:1;overflow:hidden;">
+
+  <!-- Canvas (park grid) -->
+  <div id="canvasWrap">
+    <canvas id="gameCanvas"></canvas>
+  </div>
+
+  <!-- Right panel -->
+  <div id="rightPanel">
+
+    <!-- Act 3 status indicators -->
+    <div id="actStatusPanel" class="hidden">
+      <div class="panel-title">⚠ Aktywne efekty</div>
+      <div id="poisonStatus" class="hidden" style="font-size:7px;color:#90EE90;padding:3px 0;" class="poison-active">☠ Trujące opary aktywne</div>
+      <div id="darkStatus" class="hidden" style="font-size:7px;color:#8888ff;padding:3px 0;">🌑 Ciemność – część planszy ukryta</div>
+      <div id="moleStatus" class="hidden" style="font-size:7px;color:#ffaa44;padding:3px 0;">🦔 Kret-złodziej aktywny!</div>
+      <div id="rainStatus" class="hidden" style="font-size:7px;color:#88aaff;padding:3px 0;">🌧 Deszcz – monety ukryte</div>
+    </div>
+
+    <!-- Shovel display -->
+    <div>
+      <div class="panel-title">🪵 Łopata</div>
+      <div id="shovelDisplay">Zwykła łopata [5/5]</div>
+    </div>
+
+    <!-- Discovered mounds -->
+    <div>
+      <div class="panel-title">🏔 Odkryte kopce</div>
+      <div id="moundsList" style="display:flex;flex-direction:column;gap:4px;min-height:30px;">
+        <div style="color:#666;font-size:7px;font-style:italic">Brak odkrytych kopców</div>
+      </div>
+      <button class="btn-primary" id="btnKop" onclick="handleKopClick()" disabled style="width:100%;margin-top:6px;">
+        🪏 KOP
+      </button>
+    </div>
+
+    <!-- Power potion -->
+    <div>
+      <button id="potionBtn" onclick="usePowerPotion()" disabled>🧪 Mikstura mocy (1💎 → +2⚡)</button>
+    </div>
+
+    <!-- Inventory -->
+    <div>
+      <div class="panel-title">🎒 Ekwipunek (0/6)</div>
+      <div id="inventoryGrid"></div>
+    </div>
+
+    <!-- Finish level button (hidden until canFinish) -->
+    <div id="finishBtnWrap" class="hidden">
+      <button class="btn-finish" onclick="finishLevel()">
+        🏁 ZAKOŃCZ POZIOM
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- STATUS BAR -->
+<!-- ============================================ -->
+<div id="statusBar">Witaj w Kretosferze! Odkryj 3 monety aby ukończyć poziom.</div>
+
+<!-- ============================================ -->
+<!-- DIGGING MODAL -->
+<!-- ============================================ -->
+<div id="digModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-title" id="digModalTitle">🏔 Kopiec #1</div>
+    <canvas id="digCanvas" width="340" height="300"></canvas>
+    <div id="digResults" style="max-height:100px;overflow-y:auto;margin:8px 0;"></div>
+    <div style="display:flex;gap:8px;align-items:center;margin:8px 0;">
+      <div style="flex:1;background:rgba(0,0,0,0.3);border:1px solid #4a9240;border-radius:4px;padding:6px;font-size:8px;color:#90EE90;">
+        Moc: <span id="digPowerDisplay" style="color:#FFD700;">3</span> ⚡
+        | Warstwa: <span id="digLayerDisplay" style="color:#FFD700;">1</span>/<span id="digLayerMax" style="color:#aaa;">5</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-primary" id="btnDigLayer" onclick="digLayer()" style="flex:1;">⛏ Kop warstwę (-1⚡)</button>
+      <button class="btn-primary" id="btnUseDynamite" onclick="useDynamiteOnDig()" style="flex:0.6;">💣 Dynamit</button>
+      <button class="btn-primary" onclick="closeDigModal()" style="flex:0.5;">✖ Zamknij</button>
+    </div>
+    <div id="digPreview" class="hidden" style="background:rgba(0,255,255,0.05);border:1px solid #00FFFF;border-radius:4px;padding:6px;margin-top:8px;font-size:8px;color:#00FFFF;"></div>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- SHOP MODAL -->
+<!-- ============================================ -->
+<div id="shopModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:460px;">
+    <div class="modal-title">🛒 SKLEP – Poziom <span id="shopLevelDisplay">3</span></div>
+    <div style="text-align:center;font-size:9px;color:#FFD700;margin-bottom:12px;">Brylanty: <span id="shopDiamonds">0</span> 💎</div>
+
+    <div class="panel-title">Na sprzedaż:</div>
+    <div id="shopItemsList"></div>
+
+    <div class="panel-title" style="margin-top:12px;">Sprzedaj z ekwipunku:</div>
+    <div id="shopSellList"></div>
+
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button id="shopPotionBtn" class="btn-primary" onclick="shopBuyPotion()" style="flex:1;">🧪 Kup mikstury mocy (1💎 = +2⚡)</button>
+      <button class="btn-primary" onclick="closeShopModal()" style="flex:0.6;">Kontynuuj →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- LEVEL END MODAL -->
+<!-- ============================================ -->
+<div id="levelEndModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:380px;">
+    <div class="modal-title" id="levelEndTitle">✅ POZIOM UKOŃCZONY!</div>
+    <div id="levelEndScores" style="margin:12px 0;"></div>
+    <div id="levelEndHighscore" style="text-align:center;font-size:9px;color:#FFD700;margin:8px 0;"></div>
+    <button class="btn-primary" id="btnNextLevel" onclick="proceedAfterLevel()" style="width:100%;font-size:11px;padding:12px;">
+      Następny poziom →
+    </button>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- HALL OF FAME MODAL -->
+<!-- ============================================ -->
+<div id="hofModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:500px;">
+    <div class="modal-title">🏆 HALL OF FAME – TOP 10</div>
+    <div id="hofTable" style="margin:12px 0;"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+      <button class="btn-primary" onclick="exportHoFFile()" style="flex:1;">💾 Zapisz plik</button>
+      <label class="btn-primary" style="flex:1;cursor:pointer;text-align:center;">
+        📂 Wczytaj plik
+        <input type="file" id="hofFileInput" accept=".json" style="display:none" onchange="importHoFFile(event)">
+      </label>
+      <button class="btn-primary" onclick="closeHoFModal()" style="flex:0.6;">✖ Zamknij</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- HOF NAME INPUT MODAL -->
+<!-- ============================================ -->
+<div id="hofNameModal" class="modal-overlay hidden" style="z-index:300;">
+  <div class="modal-box" style="max-width:380px;text-align:center;">
+    <div class="modal-title" style="color:#FFD700;">🏆 Wchodzisz do Hall of Fame!</div>
+    <div id="hofNameScore" style="color:#90EE90;font-size:10px;margin:8px 0;"></div>
+    <p style="color:#aaa;font-size:8px;margin:10px 0;">Wpisz swoje imię (max 20 znaków):</p>
+    <input id="hofNameInput" type="text" maxlength="20" placeholder="Twoje imię..."
+      style="width:100%;background:rgba(0,0,0,0.5);border:2px solid #4a9240;color:#FFD700;
+             font-family:inherit;font-size:11px;padding:8px 12px;border-radius:6px;outline:none;
+             text-align:center;margin:8px 0;"
+      onkeydown="if(event.key==='Enter') confirmHoFEntry()">
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button class="btn-primary" onclick="confirmHoFEntry()" style="flex:1;font-size:11px;">✅ Zapisz wynik</button>
+      <button class="btn-primary" onclick="closeHoFNameModal()" style="flex:0.5;">✖ Pomiń</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- GAME OVER MODAL -->
+<!-- ============================================ -->
+<div id="gameOverModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:360px;">
+    <div class="modal-title" style="color:#FF6666;">💀 KONIEC GRY</div>
+    <div id="gameOverReason" style="text-align:center;color:#aaa;font-size:9px;margin:8px 0;"></div>
+    <div id="gameOverScore" style="text-align:center;color:#FFD700;font-size:13px;margin:12px 0;"></div>
+    <div id="gameOverHS" style="text-align:center;color:#90EE90;font-size:9px;margin:8px 0;"></div>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="start-btn" onclick="restartGame()" style="flex:1;font-size:10px;padding:10px;">🔄 Zagraj ponownie</button>
+      <button class="start-btn" onclick="openHoFModal()" style="flex:0.7;font-size:9px;padding:10px;background:linear-gradient(to bottom,#5a4200,#3a2a00);border-color:#FFD700;color:#FFD700;">🏆 HoF</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// =============================================================
+// SEKCJA 1: STAŁE I KATALOGI
+// =============================================================
+
+const COLORS = {
+  GRASS: '#5CAB4E',
+  GRASS_DARK: '#4a9240',
+  GRASS_LIGHT: '#6dc460',
+  GRASS_REVEALED: '#3d7835',
+  COIN: '#FFD700',
+  COIN_DARK: '#B8860B',
+  MOUND: '#8B6914',
+  MOUND_DARK: '#6B5010',
+  MOUND_BOSS: '#CC2200',
+  DIAMOND: '#00FFFF',
+  TRAP: '#FF4444',
+  DIRT: ['#8B6914','#7a5c10','#9b7920','#6b4c0c'],
+  DARK_OVERLAY: 'rgba(0,0,0,0.75)',
+};
+
+// Łopaty
+const SHOVELS = {
+  basic:   { name: 'Zwykła łopata',    icon: '🪵', digCost: 1,   durability: 5, bonusFn: (l) => 0,                special: null },
+  silver:  { name: 'Srebrna łopata',   icon: '🥈', digCost: 1,   durability: 4, bonusFn: (l) => l >= 3 ? 1 : 0,  special: null },
+  gold:    { name: 'Złota łopata',     icon: '🥇', digCost: 0.5, durability: 4, bonusFn: (l) => 2,               special: 'half_cost' },
+  diamond: { name: 'Diamentowa',       icon: '💠', digCost: 1,   durability: 3, bonusFn: (l) => 3,               special: 'free_first +30pct_max' },
+  mole:    { name: 'Kretowa (LEGENDA)',icon: '🦔', digCost: 1,   durability: 2, bonusFn: (l) => 0,               special: 'double_dig +50pct_drop' },
+};
+
+// Itemy
+const ITEMS = {
+  flashlight:   { name: 'Latarka',       icon: '🔦', desc: 'Podgląd nast. warstwy kopca', cost: 3,  charges: 3 },
+  dynamite:     { name: 'Dynamit',       icon: '💣', desc: 'Kop 2 warstwy (30% -1💎)',   cost: 4,  charges: 2 },
+  magnet:       { name: 'Magnes',        icon: '🧲', desc: 'Odkryj monety w r=2',         cost: 2,  charges: 2 },
+  crystal_ball: { name: 'Kula Kryształu',icon: '🪄', desc: 'Pokaż liczbę monet',          cost: 5,  charges: 1 },
+  elixir:       { name: 'Eliksir Mocy',  icon: '⚡', desc: '+3 mocy na stałe',            cost: 3,  charges: 1 },
+  shield:       { name: 'Tarcza',        icon: '🛡️', desc: 'Zablokuj 1 pułapkę',         cost: 3,  charges: 1 },
+};
+
+// Wagi zawartości warstw kopca per akt
+const LAYER_WEIGHTS = {
+  1: [ // akt 1 (poziomy 1-4)
+    { empty: 0.35, diamond1: 0.3, diamond2: 0.2, diamond3: 0.05, trap: 0.0,  item: 0.1 },
+    { empty: 0.25, diamond1: 0.3, diamond2: 0.2, diamond3: 0.1,  trap: 0.05, item: 0.1 },
+    { empty: 0.15, diamond1: 0.25,diamond2: 0.25,diamond3: 0.15, trap: 0.1,  item: 0.1 },
+    { empty: 0.15, diamond1: 0.2, diamond2: 0.25,diamond3: 0.2,  trap: 0.1,  item: 0.1 },
+    { empty: 0.1,  diamond1: 0.2, diamond2: 0.2, diamond3: 0.25, trap: 0.1,  item: 0.15 },
+  ],
+  2: [ // akt 2 (poziomy 5-8)
+    { empty: 0.3,  diamond1: 0.25,diamond2: 0.15,diamond3: 0.05, trap: 0.1,  item: 0.15 },
+    { empty: 0.2,  diamond1: 0.25,diamond2: 0.2, diamond3: 0.1,  trap: 0.15, item: 0.1 },
+    { empty: 0.15, diamond1: 0.2, diamond2: 0.2, diamond3: 0.15, trap: 0.2,  item: 0.1 },
+    { empty: 0.1,  diamond1: 0.15,diamond2: 0.2, diamond3: 0.2,  trap: 0.2,  item: 0.15 },
+    { empty: 0.1,  diamond1: 0.1, diamond2: 0.2, diamond3: 0.25, trap: 0.2,  item: 0.15 },
+  ],
+  3: [ // akt 3 (poziomy 9+)
+    { empty: 0.25, diamond1: 0.2, diamond2: 0.15,diamond3: 0.05, trap: 0.25, item: 0.1 },
+    { empty: 0.15, diamond1: 0.2, diamond2: 0.15,diamond3: 0.1,  trap: 0.3,  item: 0.1 },
+    { empty: 0.1,  diamond1: 0.15,diamond2: 0.15,diamond3: 0.15, trap: 0.35, item: 0.1 },
+    { empty: 0.1,  diamond1: 0.1, diamond2: 0.15,diamond3: 0.2,  trap: 0.3,  item: 0.15 },
+    { empty: 0.05, diamond1: 0.1, diamond2: 0.15,diamond3: 0.25, trap: 0.3,  item: 0.15 },
+  ],
+};
+
+const MAX_INVENTORY = 6;
+const SHOP_INTERVAL = 3; // sklep co 3 poziomy
+
+// =============================================================
+// SEKCJA 2: STAN GRY
+// =============================================================
+
+// Stan trwały (między poziomami)
+let gameState = {
+  level: 1,
+  act: 1,
+  score: 0,
+  highScore: 0,
+  power: 3,
+  diamonds: 0,
+  shovel: 'basic',
+  shovelDurability: 5,
+  inventory: [], // [{key, charges}]
+  endlessModeActive: false,
+  gameOver: false,
+  stepsTotal: 0, // łączne kroki po poziomie
+};
+
+// Stan poziomu (reset per-level)
+let levelState = {
+  n: 1,
+  gridSize: 5,
+  grid: [], // [{ type, revealed, hover, moundData, coinPhase }]
+  coinsFound: 0,
+  coinsTotal: 10,
+  moundsTotal: 1,
+  stepsLeft: 15,
+  stepsMax: 15,
+  moundsDiscovered: [], // indeksy kafelków z odkrytymi kopcami
+  selectedMoundIdx: -1, // indeks aktualnie wybranego kopca
+  canFinish: false,
+  levelComplete: false,
+  darknessMask: new Set(),
+  poisonActive: false,
+  rainActive: false,
+  moleThiefActive: false,
+  poisonStepCounter: 0,
+  moleStepCounter: 0,
+};
+
+// Stan kopania (dla modalu)
+let digState = {
+  moundIdx: -1,
+  previewActive: false,
+  lastResult: null,
+};
+
+// Stan sklepu
+let shopState = {
+  items: [], // [{key, price}]
+  waitingForTransition: false,
+};
+
+// Stan cząsteczek i tweenów
+let particles = [];
+let tweens = [];
+let shakeFrames = 0;
+
+// Canvas i rendering
+let canvas, ctx, digCanvas, digCtx;
+let animFrameId = null;
+let lastTime = 0;
+let mouseX = -1, mouseY = -1;
+let TILE_SIZE = 64;
+
+// =============================================================
+// SEKCJA 3: GENERATOR POZIOMÓW
+// =============================================================
+
+function fisherYates(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function getAct(level) {
+  if (level <= 4) return 1;
+  if (level <= 8) return 2;
+  return 3;
+}
+
+function generateLevel(n) {
+  const gridSize = 4 + n;
+  const totalCells = gridSize * gridSize;
+  const moundsTotal = Math.min(1 + Math.floor(n / 3), 4);
+  const stepsMax = 12 + 3 * n;
+  const act = getAct(n);
+
+  // Tworzymy siatkę
+  const grid = Array.from({ length: totalCells }, (_, i) => ({
+    type: 'empty',
+    revealed: false,
+    hover: false,
+    moundData: null,
+    coinPhase: Math.random() * Math.PI * 2,
+    tileVariant: Math.random(), // do kolorystyki trawy
+  }));
+
+  // Tasujemy indeksy
+  const indices = fisherYates(Array.from({ length: totalCells }, (_, i) => i));
+
+  // Umieszczamy kopce
+  for (let m = 0; m < moundsTotal; m++) {
+    const idx = indices[m];
+    const isBoss = act === 3 && (n % 3 === 0) && m === 0;
+    const isFake = act >= 2 && Math.random() < (act === 2 ? 0.4 : 0.3);
+    const totalLayers = n >= 10 ? (7 + Math.floor(Math.random() * 3)) : 5;
+
+    grid[idx].type = isFake ? 'fake_mound' : 'mound';
+    grid[idx].moundData = {
+      id: `mound_${m}`,
+      fake: isFake,
+      totalLayers,
+      layers: generateMoundLayers(totalLayers, act, isFake, isBoss),
+      currentLayer: 0,
+      exhausted: false,
+      boss: isBoss,
+    };
+  }
+
+  // Umieszczamy monety (nie na kopcach)
+  let coinsPlaced = 0;
+  for (let i = moundsTotal; i < indices.length && coinsPlaced < 10; i++) {
+    const idx = indices[i];
+    if (grid[idx].type === 'empty') {
+      grid[idx].type = 'coin';
+      coinsPlaced++;
+    }
+  }
+
+  return {
+    n, gridSize, grid,
+    coinsFound: 0, coinsTotal: 10,
+    moundsTotal, stepsLeft: stepsMax, stepsMax,
+    moundsDiscovered: [],
+    selectedMoundIdx: -1,
+    canFinish: false, levelComplete: false,
+    darknessMask: new Set(),
+    poisonActive: false, rainActive: false, moleThiefActive: false,
+    poisonStepCounter: 0, moleStepCounter: 0,
+    act,
+  };
+}
+
+function generateMoundLayers(count, act, fake, boss) {
+  const layers = [];
+  const weights = LAYER_WEIGHTS[Math.min(act, 3)];
+
+  for (let i = 0; i < count; i++) {
+    if (fake && i === 0) {
+      layers.push({ content: 'fake_reveal', amount: 0, item: null });
+      continue;
+    }
+
+    // Boss: ostatnia warstwa zawsze daje item + diamenty
+    if (boss && i === count - 1) {
+      layers.push({ content: 'diamond', amount: 3, item: randomItemKey() });
+      continue;
+    }
+
+    const w = weights[Math.min(i, weights.length - 1)];
+    const roll = Math.random();
+    let cum = 0;
+    let content = 'empty';
+
+    for (const [key, prob] of Object.entries(w)) {
+      cum += prob;
+      if (roll < cum) { content = key; break; }
+    }
+
+    const layer = { content, amount: 0, item: null };
+
+    if (content.startsWith('diamond')) {
+      layer.amount = parseInt(content.replace('diamond', ''));
+      layer.content = 'diamond';
+    } else if (content === 'item') {
+      layer.item = randomItemKey();
+    }
+
+    layers.push(layer);
+  }
+
+  return layers;
+}
+
+function randomItemKey() {
+  const keys = Object.keys(ITEMS);
+  return keys[Math.floor(Math.random() * keys.length)];
+}
+
+// =============================================================
+// SEKCJA 4: RENDERER CANVAS
+// =============================================================
+
+function updateCanvasSize() {
+  if (!canvas) return;
+  const wrap = document.getElementById('canvasWrap');
+  const availW = wrap.clientWidth - 20;
+  const availH = wrap.clientHeight - 20;
+  const gs = levelState.gridSize;
+  TILE_SIZE = Math.max(24, Math.min(80, Math.floor(Math.min(availW, availH) / gs)));
+
+  canvas.width = gs * TILE_SIZE;
+  canvas.height = gs * TILE_SIZE;
+}
+
+function renderCanvas() {
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Trzęsienie ekranu
+  const shaking = shakeFrames > 0;
+  if (shaking) {
+    const dx = (Math.random() - 0.5) * 6;
+    const dy = (Math.random() - 0.5) * 6;
+    ctx.save();
+    ctx.translate(dx, dy);
+    shakeFrames--;
+  }
+
+  drawGrassTiles();
+  drawDarknessMask();
+  drawCoins();
+  drawMounds();
+  drawHoverEffect();
+  drawParticlesCanvas();
+
+  if (shaking) ctx.restore();
+}
+
+function tileToXY(idx) {
+  const gs = levelState.gridSize;
+  return { x: (idx % gs) * TILE_SIZE, y: Math.floor(idx / gs) * TILE_SIZE };
+}
+
+function tileCenterXY(idx) {
+  const { x, y } = tileToXY(idx);
+  return { x: x + TILE_SIZE / 2, y: y + TILE_SIZE / 2 };
+}
+
+function drawGrassTiles() {
+  const gs = levelState.gridSize;
+  const t = Date.now() / 1000;
+
+  for (let i = 0; i < gs * gs; i++) {
+    const cell = levelState.grid[i];
+    const { x, y } = tileToXY(i);
+
+    // Kolor trawy
+    let baseColor;
+    if (cell.revealed) {
+      baseColor = cell.type === 'empty' || cell.type === 'coin' ? COLORS.GRASS_REVEALED : COLORS.GRASS;
+    } else {
+      // Subtelna wariacja koloru
+      const v = cell.tileVariant;
+      const r = Math.floor(92 + v * 20);
+      const g = Math.floor(171 + v * 10);
+      const b = Math.floor(78 + v * 8);
+      baseColor = `rgb(${r},${g},${b})`;
+    }
+
+    ctx.fillStyle = baseColor;
+    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+
+    // Border/cień kafelka
+    ctx.strokeStyle = COLORS.GRASS_DARK;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, TILE_SIZE - 1, TILE_SIZE - 1);
+
+    // Trawa – dekoracyjne źdźbła na nieodkrytych
+    if (!cell.revealed) {
+      drawGrassDetails(ctx, x, y, cell.tileVariant, t);
+    }
+  }
+}
+
+function drawGrassDetails(ctx, x, y, variant, t) {
+  ctx.save();
+  ctx.strokeStyle = COLORS.GRASS_DARK;
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = 'round';
+
+  const blades = 2 + Math.floor(variant * 2);
+  for (let b = 0; b < blades; b++) {
+    const bx = x + 8 + b * Math.floor(TILE_SIZE / (blades + 1));
+    const by = y + TILE_SIZE - 4;
+    const h = 5 + variant * 4;
+    const wave = Math.sin(t * 1.5 + variant * 5 + b) * 1.5;
+
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.quadraticCurveTo(bx + wave, by - h / 2, bx + wave * 1.5, by - h);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawDarknessMask() {
+  if (!levelState.darknessMask.size) return;
+  const gs = levelState.gridSize;
+
+  ctx.fillStyle = COLORS.DARK_OVERLAY;
+  for (const idx of levelState.darknessMask) {
+    const { x, y } = tileToXY(idx);
+    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+  }
+}
+
+function drawCoins() {
+  const t = Date.now() / 1000;
+  const gs = levelState.gridSize;
+
+  for (let i = 0; i < gs * gs; i++) {
+    const cell = levelState.grid[i];
+    if (!cell.revealed || cell.type !== 'coin') continue;
+    if (levelState.darknessMask.has(i)) continue;
+
+    const { x, y } = tileToXY(i);
+    const cx = x + TILE_SIZE / 2;
+    const cy = y + TILE_SIZE / 2;
+    const bob = Math.sin(t * 2 + cell.coinPhase) * 2;
+    const r = TILE_SIZE * 0.28;
+
+    // Glow
+    const grd = ctx.createRadialGradient(cx, cy + bob - r * 0.3, r * 0.1, cx, cy + bob, r * 1.4);
+    grd.addColorStop(0, 'rgba(255,215,0,0.5)');
+    grd.addColorStop(1, 'rgba(255,215,0,0)');
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(cx, cy + bob, r * 1.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Cień monety
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + bob + r * 0.8, r * 0.8, r * 0.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Moneta
+    const coinGrd = ctx.createRadialGradient(cx - r * 0.3, cy + bob - r * 0.3, r * 0.1, cx, cy + bob, r);
+    coinGrd.addColorStop(0, '#FFF0A0');
+    coinGrd.addColorStop(0.5, COLORS.COIN);
+    coinGrd.addColorStop(1, COLORS.COIN_DARK);
+
+    ctx.fillStyle = coinGrd;
+    ctx.beginPath();
+    ctx.arc(cx, cy + bob, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Blask na monecie
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.beginPath();
+    ctx.arc(cx - r * 0.3, cy + bob - r * 0.3, r * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Znak '$' lub rysowany symbol
+    ctx.fillStyle = COLORS.COIN_DARK;
+    ctx.font = `bold ${Math.floor(r * 0.9)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('$', cx, cy + bob);
+  }
+}
+
+function drawMounds() {
+  const t = Date.now() / 1000;
+  const gs = levelState.gridSize;
+
+  for (let i = 0; i < gs * gs; i++) {
+    const cell = levelState.grid[i];
+    const isRevealedMound = cell.revealed && (cell.type === 'mound' || cell.type === 'fake_mound');
+    if (!isRevealedMound) continue;
+    if (levelState.darknessMask.has(i)) continue;
+
+    const { x, y } = tileToXY(i);
+    const md = cell.moundData;
+
+    drawMoundShape(x, y, TILE_SIZE, md, t, i);
+  }
+}
+
+function drawMoundShape(x, y, size, md, t, idx) {
+  const cx = x + size / 2;
+  const cy = y + size / 2;
+  const isSelected = levelState.selectedMoundIdx === idx;
+  const isExhausted = md && md.exhausted;
+  const isBoss = md && md.boss;
+
+  // Pulsujący ring na zaznaczonym
+  if (isSelected && !isExhausted) {
+    const pulse = 0.5 + 0.5 * Math.sin(t * 4);
+    ctx.strokeStyle = `rgba(255,215,0,${0.5 + pulse * 0.5})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + size * 0.1, size * 0.45, size * 0.25, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Kopiec – kształt trapezu
+  const baseColor = isBoss ? COLORS.MOUND_BOSS : COLORS.MOUND;
+  const darkColor = isBoss ? '#aa1100' : COLORS.MOUND_DARK;
+
+  const mGrd = ctx.createRadialGradient(cx, cy - size * 0.1, size * 0.1, cx, cy, size * 0.4);
+  mGrd.addColorStop(0, isBoss ? '#ff5533' : '#a07828');
+  mGrd.addColorStop(1, darkColor);
+
+  ctx.fillStyle = mGrd;
+  ctx.beginPath();
+  ctx.moveTo(x + size * 0.1, y + size * 0.75);
+  ctx.quadraticCurveTo(x + size * 0.15, y + size * 0.35, cx, y + size * 0.25);
+  ctx.quadraticCurveTo(x + size * 0.85, y + size * 0.35, x + size * 0.9, y + size * 0.75);
+  ctx.closePath();
+  ctx.fill();
+
+  // Ciemniejszy odcień u dołu
+  ctx.fillStyle = darkColor;
+  ctx.beginPath();
+  ctx.ellipse(cx, y + size * 0.72, size * 0.38, size * 0.1, 0, 0, Math.PI);
+  ctx.fill();
+
+  // Małe kamyczki/grudki
+  ctx.fillStyle = darkColor;
+  for (let s = 0; s < 3; s++) {
+    const sx = cx + (s - 1) * size * 0.15 + Math.sin(idx + s) * size * 0.08;
+    const sy = y + size * 0.6 + Math.cos(idx + s) * size * 0.05;
+    ctx.beginPath();
+    ctx.arc(sx, sy, size * 0.04, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Boss glow
+  if (isBoss) {
+    const glowPulse = 0.5 + 0.5 * Math.sin(t * 3);
+    ctx.strokeStyle = `rgba(255,100,0,${glowPulse})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x + size * 0.1, y + size * 0.75);
+    ctx.quadraticCurveTo(x + size * 0.15, y + size * 0.35, cx, y + size * 0.25);
+    ctx.quadraticCurveTo(x + size * 0.85, y + size * 0.35, x + size * 0.9, y + size * 0.75);
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  // Znak wykrzyknika na bossie
+  if (isBoss) {
+    ctx.fillStyle = '#FFD700';
+    ctx.font = `bold ${Math.floor(size * 0.3)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('!', cx, cy + size * 0.05);
+  }
+
+  // Szary overlay na wyczerpanych kopcach
+  if (isExhausted) {
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.beginPath();
+    ctx.moveTo(x + size * 0.1, y + size * 0.75);
+    ctx.quadraticCurveTo(x + size * 0.15, y + size * 0.35, cx, y + size * 0.25);
+    ctx.quadraticCurveTo(x + size * 0.85, y + size * 0.35, x + size * 0.9, y + size * 0.75);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#aaa';
+    ctx.font = `${Math.floor(size * 0.25)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('✓', cx, cy + size * 0.05);
+  }
+}
+
+function drawHoverEffect() {
+  if (mouseX < 0 || mouseY < 0) return;
+  const gs = levelState.gridSize;
+  const tx = Math.floor(mouseX / TILE_SIZE);
+  const ty = Math.floor(mouseY / TILE_SIZE);
+  if (tx < 0 || tx >= gs || ty < 0 || ty >= gs) return;
+
+  const idx = ty * gs + tx;
+  const cell = levelState.grid[idx];
+  if (cell.revealed) return;
+
+  const { x, y } = tileToXY(idx);
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+}
+
+function drawParticlesCanvas() {
+  for (const p of particles) {
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(1, p.radius * p.life), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// =============================================================
+// SEKCJA 5: SYSTEM ANIMACJI
+// =============================================================
+
+function spawnParticles(type, cx, cy, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1.5 + Math.random() * 3.5;
+    let color;
+    if (type === 'coin') color = ['#FFD700','#FFF0A0','#B8860B'][Math.floor(Math.random() * 3)];
+    else if (type === 'diamond') color = ['#00FFFF','#88FFFF','#0088FF','#FFFFFF'][Math.floor(Math.random() * 4)];
+    else if (type === 'dirt') color = COLORS.DIRT[Math.floor(Math.random() * COLORS.DIRT.length)];
+    else if (type === 'trap') color = ['#FF4444','#FF0000','#FF8800'][Math.floor(Math.random() * 3)];
+    else color = '#ffffff';
+
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - (type !== 'dirt' ? 2 : 0),
+      life: 1.0,
+      decay: 0.018 + Math.random() * 0.025,
+      color,
+      radius: 2 + Math.random() * 4,
+      type,
+    });
+  }
+}
+
+function tickParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.12; // grawitacja
+    p.vx *= 0.98;
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function addTween(obj, prop, target, duration, onComplete) {
+  tweens.push({ obj, prop, start: obj[prop], target, duration, elapsed: 0, onComplete });
+}
+
+function tickTweens(dt) {
+  for (let i = tweens.length - 1; i >= 0; i--) {
+    const t = tweens[i];
+    t.elapsed += dt;
+    const progress = Math.min(t.elapsed / t.duration, 1);
+    const ease = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+    t.obj[t.prop] = t.start + (t.target - t.start) * ease;
+    if (progress >= 1) {
+      t.onComplete && t.onComplete();
+      tweens.splice(i, 1);
+    }
+  }
+}
+
+function triggerScreenShake() {
+  shakeFrames = 10;
+}
+
+// =============================================================
+// SEKCJA 6: SILNIK KOPANIA
+// =============================================================
+
+function openDigModal(moundIdx) {
+  const cell = levelState.grid[moundIdx];
+  if (!cell || !cell.moundData) return;
+
+  const md = cell.moundData;
+  digState.moundIdx = moundIdx;
+  digState.previewActive = false;
+  digState.lastResult = null;
+
+  document.getElementById('digModal').classList.remove('hidden');
+  document.getElementById('digModalTitle').textContent =
+    `${md.boss ? '💀 BOSS-' : '🏔 '}Kopiec ${md.id.replace('mound_', '#')}${md.fake ? ' [PODEJRZANY]' : ''}`;
+  document.getElementById('digResults').innerHTML = '';
+  document.getElementById('digPreview').classList.add('hidden');
+
+  updateDigUI(md);
+  renderDigCanvas(md);
+}
+
+function updateDigUI(md) {
+  const powerNeeded = getShovelCost(md.currentLayer);
+  const canDig = md.currentLayer < md.totalLayers &&
+                 !md.exhausted && gameState.power >= powerNeeded;
+
+  document.getElementById('digPowerDisplay').textContent = Math.floor(gameState.power);
+  document.getElementById('digLayerDisplay').textContent = md.currentLayer + 1;
+  document.getElementById('digLayerMax').textContent = md.totalLayers;
+
+  const btnDig = document.getElementById('btnDigLayer');
+  btnDig.textContent = `⛏ Kop warstwę (-${powerNeeded}⚡)`;
+  btnDig.disabled = !canDig;
+
+  // Sprawdź dynamit w ekwipunku
+  const hasDynamite = gameState.inventory.some(item => item.key === 'dynamite' && item.charges > 0);
+  document.getElementById('btnUseDynamite').disabled = !hasDynamite || md.exhausted;
+}
+
+function getShovelCost(layerIdx) {
+  const shovel = SHOVELS[gameState.shovel];
+  if (!shovel) return 1;
+
+  let cost = shovel.digCost;
+
+  if (shovel.special && shovel.special.includes('free_first') && layerIdx === 0) {
+    cost = 0;
+  }
+
+  return Math.ceil(cost); // zawsze zaokrąglamy w górę dla sprawdzenia mocy
+}
+
+function getShovelCostFloat(layerIdx) {
+  const shovel = SHOVELS[gameState.shovel];
+  if (!shovel) return 1;
+  let cost = shovel.digCost;
+  if (shovel.special && shovel.special.includes('free_first') && layerIdx === 0) cost = 0;
+  return cost;
+}
+
+function getShovelBonus(layerIdx) {
+  const shovel = SHOVELS[gameState.shovel];
+  if (!shovel) return 0;
+  let bonus = shovel.bonusFn(layerIdx + 1);
+
+  if (shovel.special && shovel.special.includes('+50pct_drop')) {
+    bonus = Math.ceil(bonus * 1.5);
+  }
+  if (shovel.special && shovel.special.includes('+30pct_max') && Math.random() < 0.3) {
+    bonus += 1;
+  }
+  return bonus;
+}
+
+function digLayer() {
+  const moundIdx = digState.moundIdx;
+  if (moundIdx < 0) return;
+  const cell = levelState.grid[moundIdx];
+  const md = cell.moundData;
+  if (!md || md.exhausted) return;
+
+  const isDouble = SHOVELS[gameState.shovel]?.special?.includes('double_dig');
+  const layersToProcess = Math.min(isDouble ? 2 : 1, md.totalLayers - md.currentLayer);
+
+  for (let lp = 0; lp < layersToProcess; lp++) {
+    if (md.currentLayer >= md.totalLayers) break;
+
+    const powerCost = getShovelCostFloat(md.currentLayer);
+    if (Math.floor(gameState.power) < Math.ceil(powerCost)) break;
+
+    gameState.power = Math.max(0, gameState.power - powerCost);
+
+    // Degeneracja łopaty
+    gameState.shovelDurability--;
+    if (gameState.shovelDurability <= 0) {
+      showStatus(`⚠ Łopata ${SHOVELS[gameState.shovel].name} zepsuła się!`);
+      gameState.shovel = 'basic';
+      gameState.shovelDurability = SHOVELS.basic.durability;
+      renderShovelDisplay();
+    }
+
+    processLayer(md, md.currentLayer);
+    md.currentLayer++;
+
+    if (md.currentLayer >= md.totalLayers) {
+      md.exhausted = true;
+    }
+  }
+
+  // Poison vapor co 5 kroków
+  if (levelState.poisonActive) {
+    levelState.poisonStepCounter++;
+    if (levelState.poisonStepCounter >= 5) {
+      levelState.poisonStepCounter = 0;
+      gameState.power = Math.max(0, gameState.power - 1);
+      showStatus('☠ Trujące opary! Stracono 1 punkt mocy!', 'danger');
+    }
+  }
+
+  updateDigUI(md);
+  renderDigCanvas(md);
+  updateUI();
+
+  // Sprawdź game over po wyczerpaniu mocy
+  if (gameState.power < 1 && !md.exhausted) {
+    showStatus('⚡ Brak mocy! Nie możesz kopać.', 'warning');
+    document.getElementById('btnDigLayer').disabled = true;
+  }
+
+  if (md.exhausted) {
+    showStatus(`✅ Kopiec ${md.id.replace('mound_', '#')} wyczerpany!`);
+    renderMoundsList();
+    updateUI();
+  }
+}
+
+function processLayer(md, layerIdx) {
+  const layer = md.layers[layerIdx];
+  let resultHTML = '';
+
+  if (layer.content === 'fake_reveal') {
+    // Fałszywy kopiec!
+    md.fake = true;
+    md.exhausted = true;
+    resultHTML = `<div class="layer-result empty">🐛 Pusty kopiec robaczkowy! Był fałszywy.</div>`;
+    showStatus('🐛 To był fałszywy kopiec! Strata mocy...', 'warning');
+
+    // Dyganie ekranem
+    const center = tileCenterXY(digState.moundIdx);
+    spawnParticles('dirt', center.x, center.y, 15);
+    triggerScreenShake();
+
+  } else if (layer.content === 'diamond') {
+    let amount = layer.amount + getShovelBonus(layerIdx);
+    gameState.diamonds += amount;
+    gameState.score += amount * 5;
+
+    resultHTML = `<div class="layer-result diamond">💎 Znaleziono ${amount} brylant${amount > 1 ? 'y' : ''}! +${amount * 5} pkt</div>`;
+    showStatus(`💎 +${amount} brylant${amount > 1 ? 'y' : ''}!`);
+
+    const center = tileCenterXY(digState.moundIdx);
+    spawnParticles('diamond', center.x, center.y, amount * 6);
+    spawnParticles('dirt', center.x, center.y, 8);
+
+    // Boss: dodatkowy item w tej warstwie
+    if (layer.item && gameState.inventory.length < MAX_INVENTORY) {
+      const itemDef = ITEMS[layer.item];
+      if (itemDef) {
+        gameState.inventory.push({ key: layer.item, charges: itemDef.charges });
+        resultHTML += `<div class="layer-result item">🎁 BOSS NAGRODA: ${itemDef.icon} ${itemDef.name}!</div>`;
+      }
+    }
+
+  } else if (layer.content === 'trap') {
+    const hasShield = gameState.inventory.findIndex(item => item.key === 'shield' && item.charges > 0);
+    if (hasShield >= 0) {
+      gameState.inventory[hasShield].charges--;
+      if (gameState.inventory[hasShield].charges <= 0) {
+        gameState.inventory.splice(hasShield, 1);
+      }
+      resultHTML = `<div class="layer-result item">🛡️ Tarcza zablokowała pułapkę!</div>`;
+      showStatus('🛡️ Tarcza ochronna zadziałała!');
+    } else {
+      gameState.power = Math.max(0, gameState.power - 1);
+      resultHTML = `<div class="layer-result trap">🪤 PUŁAPKA! Stracono 1 punkt mocy!</div>`;
+      showStatus('🪤 Pułapka! -1 moc!', 'danger');
+      triggerScreenShake();
+      const center = tileCenterXY(digState.moundIdx);
+      spawnParticles('trap', center.x, center.y, 10);
+    }
+
+  } else if (layer.content === 'item') {
+    if (gameState.inventory.length < MAX_INVENTORY) {
+      const itemKey = layer.item || randomItemKey();
+      const itemDef = ITEMS[itemKey];
+      gameState.inventory.push({ key: itemKey, charges: itemDef.charges });
+      resultHTML = `<div class="layer-result item">${itemDef.icon} Znaleziono: ${itemDef.name}!</div>`;
+      showStatus(`${itemDef.icon} Nowy item: ${itemDef.name}!`);
+    } else {
+      resultHTML = `<div class="layer-result empty">🎒 Ekwipunek pełny! Item utracony.</div>`;
+      showStatus('🎒 Ekwipunek pełny! Item utracony.', 'warning');
+    }
+
+  } else { // empty
+    const bonus = getShovelBonus(layerIdx);
+    if (bonus > 0) {
+      gameState.diamonds += bonus;
+      resultHTML = `<div class="layer-result diamond">✨ Pusta warstwa, ale łopata przyniosła ${bonus} brylant${bonus > 1 ? 'y' : ''}!</div>`;
+    } else {
+      resultHTML = `<div class="layer-result empty">💨 Pusta warstwa...</div>`;
+    }
+    const center = tileCenterXY(digState.moundIdx);
+    spawnParticles('dirt', center.x, center.y, 8);
+  }
+
+  const resultsDiv = document.getElementById('digResults');
+  resultsDiv.insertAdjacentHTML('beforeend', resultHTML);
+  resultsDiv.scrollTop = resultsDiv.scrollHeight;
+}
+
+function useDynamiteOnDig() {
+  const itemIdx = gameState.inventory.findIndex(item => item.key === 'dynamite' && item.charges > 0);
+  if (itemIdx < 0) { showStatus('Brak dynamitu!', 'warning'); return; }
+
+  const moundIdx = digState.moundIdx;
+  const cell = levelState.grid[moundIdx];
+  const md = cell.moundData;
+  if (!md || md.exhausted) return;
+
+  gameState.inventory[itemIdx].charges--;
+  if (gameState.inventory[itemIdx].charges <= 0) {
+    gameState.inventory.splice(itemIdx, 1);
+  }
+
+  const layersToProcess = Math.min(2, md.totalLayers - md.currentLayer);
+  for (let lp = 0; lp < layersToProcess; lp++) {
+    processLayer(md, md.currentLayer);
+    md.currentLayer++;
+    // 30% szansy na utratę 1 brylantu
+    if (Math.random() < 0.3 && gameState.diamonds > 0) {
+      gameState.diamonds--;
+      showStatus('💣 Eksplozja! Stracono 1 brylant.', 'warning');
+    }
+  }
+
+  if (md.currentLayer >= md.totalLayers) md.exhausted = true;
+  triggerScreenShake();
+  const center = tileCenterXY(moundIdx);
+  spawnParticles('dirt', center.x, center.y, 20);
+
+  updateDigUI(md);
+  renderDigCanvas(md);
+  updateUI();
+}
+
+function useFlashlightOnDig() {
+  const itemIdx = gameState.inventory.findIndex(item => item.key === 'flashlight' && item.charges > 0);
+  if (itemIdx < 0) return;
+
+  const moundIdx = digState.moundIdx;
+  const cell = levelState.grid[moundIdx];
+  const md = cell.moundData;
+  if (!md || md.exhausted) return;
+
+  const nextLayerIdx = md.currentLayer;
+  if (nextLayerIdx >= md.totalLayers) return;
+
+  gameState.inventory[itemIdx].charges--;
+  if (gameState.inventory[itemIdx].charges <= 0) {
+    gameState.inventory.splice(itemIdx, 1);
+  }
+
+  const layer = md.layers[nextLayerIdx];
+  let previewText = '🔦 Podgląd następnej warstwy: ';
+  if (layer.content === 'diamond') previewText += `💎 ${layer.amount} brylant${layer.amount > 1 ? 'y' : ''}`;
+  else if (layer.content === 'trap') previewText += '🪤 PUŁAPKA!';
+  else if (layer.content === 'item') previewText += `${ITEMS[layer.item]?.icon || '?'} ${ITEMS[layer.item]?.name || 'Item'}`;
+  else previewText += '💨 Pusta warstwa';
+
+  const previewDiv = document.getElementById('digPreview');
+  previewDiv.textContent = previewText;
+  previewDiv.classList.remove('hidden');
+  digState.previewActive = true;
+  updateUI();
+}
+
+function renderDigCanvas(md) {
+  if (!digCtx) return;
+  const dw = digCanvas.width;
+  const dh = digCanvas.height;
+
+  digCtx.clearRect(0, 0, dw, dh);
+
+  // Tło – przekrój ziemi
+  const bgGrd = digCtx.createLinearGradient(0, 0, 0, dh);
+  bgGrd.addColorStop(0, '#3d2810');
+  bgGrd.addColorStop(1, '#1a0f05');
+  digCtx.fillStyle = bgGrd;
+  digCtx.fillRect(0, 0, dw, dh);
+
+  const totalLayers = md.totalLayers;
+  const layerH = dh / totalLayers;
+
+  for (let i = 0; i < totalLayers; i++) {
+    const y = i * layerH;
+    const layer = md.layers[i];
+    const isDug = i < md.currentLayer;
+    const isCurrent = i === md.currentLayer;
+
+    // Kolor warstwy
+    const darknessFactor = 0.6 + (i / totalLayers) * 0.4;
+    let layerColor;
+    if (isDug) {
+      layerColor = 'rgba(0,0,0,0.7)';
+    } else {
+      const r = Math.floor((60 + i * 10) * darknessFactor);
+      const g = Math.floor((35 + i * 5) * darknessFactor);
+      const b = Math.floor((12 + i * 3) * darknessFactor);
+      layerColor = `rgb(${r},${g},${b})`;
+    }
+
+    digCtx.fillStyle = layerColor;
+    digCtx.fillRect(0, y, dw, layerH);
+
+    // Linia podziału
+    digCtx.strokeStyle = isDug ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.4)';
+    digCtx.lineWidth = 1;
+    digCtx.beginPath();
+    digCtx.moveTo(0, y + layerH);
+    digCtx.lineTo(dw, y + layerH);
+    digCtx.stroke();
+
+    // Podświetlenie aktualnej warstwy
+    if (isCurrent) {
+      digCtx.strokeStyle = 'rgba(255,215,0,0.7)';
+      digCtx.lineWidth = 2;
+      digCtx.strokeRect(1, y + 1, dw - 2, layerH - 2);
+    }
+
+    // Zawartość warstwy (tylko odkopanych lub bieżącej z latarką)
+    const showContent = isDug || (isCurrent && digState.previewActive);
+    if (showContent && layer) {
+      drawLayerContent(digCtx, layer, dw / 2, y + layerH / 2, isDug);
+    }
+
+    // Numer warstwy
+    digCtx.fillStyle = isDug ? 'rgba(255,255,255,0.3)' : (isCurrent ? '#FFD700' : 'rgba(255,255,255,0.5)');
+    digCtx.font = `${Math.floor(layerH * 0.35)}px monospace`;
+    digCtx.textAlign = 'left';
+    digCtx.textBaseline = 'middle';
+    digCtx.fillText(`W${i + 1}`, 6, y + layerH / 2);
+  }
+
+  // Etykieta "POZIOM GRUNTU"
+  digCtx.fillStyle = 'rgba(144,238,144,0.5)';
+  digCtx.font = '9px monospace';
+  digCtx.textAlign = 'right';
+  digCtx.fillText('↑ POWIERZCHNIA', dw - 4, 12);
+}
+
+function drawLayerContent(ctx, layer, cx, cy, isDug) {
+  const t = Date.now() / 1000;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  if (layer.content === 'diamond' && isDug) {
+    // Tęczowy brylant
+    const hue = (t * 60) % 360;
+    ctx.fillStyle = `hsl(${hue}, 100%, 70%)`;
+    ctx.font = '16px serif';
+    ctx.fillText(`💎×${layer.amount}`, cx, cy);
+  } else if (layer.content === 'trap' && isDug) {
+    ctx.fillStyle = '#FF6666';
+    ctx.font = '16px serif';
+    ctx.fillText('🪤', cx, cy);
+  } else if (layer.content === 'item' && isDug) {
+    ctx.fillStyle = '#FFD700';
+    ctx.font = '16px serif';
+    ctx.fillText(ITEMS[layer.item]?.icon || '?', cx, cy);
+  } else if (layer.content === 'empty' && isDug) {
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '12px serif';
+    ctx.fillText('~', cx, cy);
+  } else if (layer.content === 'fake_reveal' && isDug) {
+    ctx.fillStyle = '#aaa';
+    ctx.font = '14px serif';
+    ctx.fillText('🐛', cx, cy);
+  } else if (!isDug && digState.previewActive) {
+    // Podgląd latarką – rozmyte
+    ctx.globalAlpha = 0.6;
+    if (layer.content === 'diamond') ctx.fillText(`💎?`, cx, cy);
+    else if (layer.content === 'trap') ctx.fillText('⚠', cx, cy);
+    else if (layer.content === 'item') ctx.fillText('📦?', cx, cy);
+    else ctx.fillText('~', cx, cy);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function closeDigModal() {
+  document.getElementById('digModal').classList.add('hidden');
+  digState.moundIdx = -1;
+  digState.previewActive = false;
+  renderMoundsList();
+  updateUI();
+}
+
+// =============================================================
+// SEKCJA 7: SYSTEM ITEMÓW I SKLEPU
+// =============================================================
+
+function useItem(invIdx) {
+  const item = gameState.inventory[invIdx];
+  if (!item || item.charges <= 0) return;
+
+  const def = ITEMS[item.key];
+  if (!def) return;
+
+  switch (item.key) {
+    case 'flashlight':
+      if (document.getElementById('digModal').classList.contains('hidden')) {
+        showStatus('🔦 Otwórz najpierw kopiec, żeby użyć latarki!', 'warning');
+        return;
+      }
+      useFlashlightOnDig();
+      break;
+
+    case 'dynamite':
+      if (document.getElementById('digModal').classList.contains('hidden')) {
+        showStatus('💣 Otwórz najpierw kopiec, żeby użyć dynamitu!', 'warning');
+        return;
+      }
+      // Dynamit jest obsługiwany przez przycisk w modalu
+      return;
+
+    case 'magnet':
+      useMagnet();
+      break;
+
+    case 'crystal_ball':
+      useCrystalBall();
+      break;
+
+    case 'elixir':
+      gameState.power += 3;
+      showStatus('⚡ Eliksir mocy! +3 punkt mocy!');
+      break;
+
+    case 'shield':
+      showStatus('🛡️ Tarcza gotowa – zadziała przy następnej pułapce!');
+      return; // Nie zużywamy – automatycznie aktywuje się przy pułapce
+  }
+
+  item.charges--;
+  if (item.charges <= 0) {
+    gameState.inventory.splice(invIdx, 1);
+  }
+
+  renderInventory();
+  updateUI();
+}
+
+function useMagnet() {
+  const gs = levelState.gridSize;
+  let coinsRevealed = 0;
+
+  // Znajdź ostatnio odkryty kafelek jako środek
+  let centerIdx = -1;
+  for (let i = levelState.grid.length - 1; i >= 0; i--) {
+    if (levelState.grid[i].revealed) { centerIdx = i; break; }
+  }
+
+  if (centerIdx < 0) {
+    showStatus('🧲 Nie ma skąd użyć magnesu – odkryj najpierw jakiś kafelek!', 'warning');
+    return;
+  }
+
+  const cx = centerIdx % gs;
+  const cy = Math.floor(centerIdx / gs);
+
+  for (let y = 0; y < gs; y++) {
+    for (let x = 0; x < gs; x++) {
+      const chebyshev = Math.max(Math.abs(x - cx), Math.abs(y - cy));
+      if (chebyshev > 2) continue;
+
+      const idx = y * gs + x;
+      const cell = levelState.grid[idx];
+      if (!cell.revealed && cell.type === 'coin') {
+        cell.revealed = true;
+        levelState.coinsFound++;
+        gameState.score += 10;
+        coinsRevealed++;
+        const center = tileCenterXY(idx);
+        spawnParticles('coin', center.x, center.y, 10);
+      }
+    }
+  }
+
+  if (coinsRevealed > 0) {
+    showStatus(`🧲 Magnes odkrył ${coinsRevealed} monetę/monety w pobliżu!`);
+    checkLevelComplete();
+  } else {
+    showStatus('🧲 Magnes użyty – brak monet w pobliżu.', 'warning');
+  }
+}
+
+function useCrystalBall() {
+  const gs = levelState.gridSize;
+  let remaining = 0;
+  for (let i = 0; i < gs * gs; i++) {
+    if (!levelState.grid[i].revealed && levelState.grid[i].type === 'coin') remaining++;
+  }
+  showStatus(`🪄 Kula Kryształu: pozostało ${remaining} ukrytych monet na planszy!`);
+}
+
+function usePowerPotion() {
+  if (gameState.diamonds < 1) {
+    showStatus('Brak brylantów!', 'warning');
+    return;
+  }
+  gameState.diamonds--;
+  gameState.power += 2;
+  showStatus('🧪 Mikstura mocy! +2 moc!');
+  updateUI();
+  renderPotionButton();
+}
+
+// Sklep
+function generateShopItems() {
+  const allKeys = Object.keys(ITEMS);
+  const shuffled = fisherYates([...allKeys]);
+  shopState.items = shuffled.slice(0, 3).map(key => ({
+    key,
+    price: ITEMS[key].cost,
+  }));
+}
+
+function openShopModal() {
+  generateShopItems();
+  document.getElementById('shopLevelDisplay').textContent = gameState.level;
+  document.getElementById('shopModal').classList.remove('hidden');
+  renderShopModal();
+}
+
+function renderShopModal() {
+  document.getElementById('shopDiamonds').textContent = gameState.diamonds;
+
+  // Dostępne itemy
+  const listEl = document.getElementById('shopItemsList');
+  listEl.innerHTML = '';
+
+  for (const si of shopState.items) {
+    const def = ITEMS[si.key];
+    const canAfford = gameState.diamonds >= si.price;
+    const fullInv = gameState.inventory.length >= MAX_INVENTORY;
+
+    listEl.insertAdjacentHTML('beforeend', `
+      <div class="shop-item-card">
+        <div class="item-icon">${def.icon}</div>
+        <div class="item-info">
+          <h3>${def.name}</h3>
+          <p>${def.desc} (${def.charges} użyć)</p>
+        </div>
+        <button class="buy-btn" onclick="shopBuyItem('${si.key}', ${si.price})"
+          ${(!canAfford || fullInv) ? 'disabled' : ''}>
+          Kup (${si.price}💎)
+        </button>
+      </div>
+    `);
+  }
+
+  // Sprzedaż z ekwipunku
+  const sellListEl = document.getElementById('shopSellList');
+  sellListEl.innerHTML = '';
+
+  if (gameState.inventory.length === 0) {
+    sellListEl.innerHTML = '<div style="color:#666;font-size:8px;padding:6px">Ekwipunek pusty</div>';
+  } else {
+    for (let i = 0; i < gameState.inventory.length; i++) {
+      const inv = gameState.inventory[i];
+      const def = ITEMS[inv.key];
+      if (!def) continue;
+      const sellPrice = Math.max(1, Math.floor(def.cost / 2));
+      sellListEl.insertAdjacentHTML('beforeend', `
+        <div class="sell-item-card">
+          <span>${def.icon}</span>
+          <span>${def.name} (${inv.charges}/${def.charges})</span>
+          <button class="sell-btn" onclick="shopSellItem(${i}, ${sellPrice})">
+            Sprzedaj (+${sellPrice}💎)
+          </button>
+        </div>
+      `);
+    }
+  }
+
+  // Mikstura mocy
+  const potionBtnEl = document.getElementById('shopPotionBtn');
+  potionBtnEl.disabled = gameState.diamonds < 1;
+}
+
+function shopBuyItem(key, price) {
+  if (gameState.diamonds < price) { showStatus('Za mało brylantów!', 'warning'); return; }
+  if (gameState.inventory.length >= MAX_INVENTORY) { showStatus('Ekwipunek pełny!', 'warning'); return; }
+
+  gameState.diamonds -= price;
+  const def = ITEMS[key];
+  gameState.inventory.push({ key, charges: def.charges });
+  showStatus(`${def.icon} Kupiono: ${def.name}!`);
+  renderShopModal();
+  renderInventory();
+  updateUI();
+}
+
+function shopSellItem(invIdx, price) {
+  const inv = gameState.inventory[invIdx];
+  if (!inv) return;
+  const def = ITEMS[inv.key];
+  gameState.diamonds += price;
+  gameState.inventory.splice(invIdx, 1);
+  showStatus(`${def?.icon || '?'} Sprzedano za ${price}💎!`);
+  renderShopModal();
+  renderInventory();
+  updateUI();
+}
+
+function shopBuyPotion() {
+  if (gameState.diamonds < 1) return;
+  gameState.diamonds--;
+  gameState.power += 2;
+  showStatus('🧪 Mikstura mocy! +2 moc!');
+  renderShopModal();
+  updateUI();
+}
+
+function closeShopModal() {
+  document.getElementById('shopModal').classList.add('hidden');
+  shopState.waitingForTransition = false;
+  gameState.level++;
+  startLevel(gameState.level);
+}
+
+// =============================================================
+// SEKCJA 8: MECHANIKI AKTÓW
+// =============================================================
+
+function setupActMechanics() {
+  const act = levelState.act;
+  const n = levelState.n;
+
+  // Act 3: Ciemność
+  if (act >= 3) {
+    generateDarknessMask();
+    document.getElementById('darkStatus').classList.remove('hidden');
+    document.getElementById('actStatusPanel').classList.remove('hidden');
+  } else {
+    document.getElementById('darkStatus').classList.add('hidden');
+  }
+
+  // Act 3: Trujące opary
+  if (act >= 3 && Math.random() < 0.5) {
+    levelState.poisonActive = true;
+    document.getElementById('poisonStatus').classList.remove('hidden');
+    document.getElementById('actStatusPanel').classList.remove('hidden');
+    showStatus('☠ Trujące opary! Co 5 ruchów tracisz 1 moc!', 'danger');
+  } else {
+    levelState.poisonActive = false;
+    document.getElementById('poisonStatus').classList.add('hidden');
+  }
+
+  // Act 3: Deszcz
+  if (act >= 3 && Math.random() < 0.3) {
+    levelState.rainActive = true;
+    document.getElementById('rainStatus').classList.remove('hidden');
+    document.getElementById('actStatusPanel').classList.remove('hidden');
+    startRainEffect();
+    // Ukryj połowę monet (z powrotem jako nieodkryte)
+    showStatus('🌧 Deszcz! Widoczność monet ograniczona!', 'warning');
+  } else {
+    levelState.rainActive = false;
+    document.getElementById('rainStatus').classList.add('hidden');
+    stopRainEffect();
+  }
+
+  // Act 2+: Kret-złodziej
+  if (act >= 2 && Math.random() < (act === 2 ? 0.25 : 0.4)) {
+    levelState.moleThiefActive = true;
+    document.getElementById('moleStatus').classList.remove('hidden');
+    document.getElementById('actStatusPanel').classList.remove('hidden');
+    showStatus('🦔 Kret-złodziej gdzieś tu się kryje! Uważaj na monety!', 'warning');
+  } else {
+    levelState.moleThiefActive = false;
+    document.getElementById('moleStatus').classList.add('hidden');
+  }
+
+  if (act === 1) {
+    document.getElementById('actStatusPanel').classList.add('hidden');
+  }
+}
+
+function generateDarknessMask() {
+  const gs = levelState.gridSize;
+  levelState.darknessMask = new Set();
+
+  // Ukrywamy ~40% planszy losowo
+  for (let i = 0; i < gs * gs; i++) {
+    if (Math.random() < 0.4) {
+      levelState.darknessMask.add(i);
+    }
+  }
+}
+
+function updateDarknessMaskAfterReveal(revealedIdx) {
+  if (!levelState.darknessMask.size) return;
+  // Odkrycie kafelka odsłania sąsiadów w ciemności
+  const gs = levelState.gridSize;
+  const rx = revealedIdx % gs;
+  const ry = Math.floor(revealedIdx / gs);
+
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const nx = rx + dx, ny = ry + dy;
+      if (nx >= 0 && nx < gs && ny >= 0 && ny < gs) {
+        levelState.darknessMask.delete(ny * gs + nx);
+      }
+    }
+  }
+}
+
+function checkMoleThief() {
+  if (!levelState.moleThiefActive) return;
+  levelState.moleStepCounter++;
+
+  if (levelState.moleStepCounter >= 4 && Math.random() < 0.2) {
+    levelState.moleStepCounter = 0;
+    // Kret kradnie odkrytą monetę
+    const gs = levelState.gridSize;
+    const revealedCoins = [];
+    for (let i = 0; i < gs * gs; i++) {
+      if (levelState.grid[i].revealed && levelState.grid[i].type === 'coin') {
+        revealedCoins.push(i);
+      }
+    }
+    if (revealedCoins.length > 0) {
+      const stealIdx = revealedCoins[Math.floor(Math.random() * revealedCoins.length)];
+      levelState.grid[stealIdx].type = 'stolen';
+      levelState.coinsFound = Math.max(0, levelState.coinsFound - 1);
+      gameState.score = Math.max(0, gameState.score - 10);
+      showStatus('🦔 Kret-złodziej ukradł monetę!', 'danger');
+      triggerScreenShake();
+    }
+  }
+}
+
+function startRainEffect() {
+  const rainDiv = document.getElementById('rainOverlay');
+  rainDiv.classList.remove('hidden');
+  rainDiv.innerHTML = '';
+
+  for (let i = 0; i < 40; i++) {
+    const drop = document.createElement('div');
+    drop.className = 'raindrop';
+    drop.style.left = `${Math.random() * 100}%`;
+    drop.style.height = `${15 + Math.random() * 25}px`;
+    drop.style.animationDuration = `${0.5 + Math.random() * 0.8}s`;
+    drop.style.animationDelay = `${Math.random() * 1}s`;
+    rainDiv.appendChild(drop);
+  }
+}
+
+function stopRainEffect() {
+  const rainDiv = document.getElementById('rainOverlay');
+  rainDiv.classList.add('hidden');
+  rainDiv.innerHTML = '';
+}
+
+// =============================================================
+// SEKCJA 9: UI CONTROLLERS
+// =============================================================
+
+function updateUI() {
+  renderTopBar();
+  renderShovelDisplay();
+  renderPotionButton();
+  renderInventory();
+  renderFinishButton();
+}
+
+function renderTopBar() {
+  document.getElementById('hbLevel').textContent = gameState.level;
+  document.getElementById('hbCoins').textContent = `${levelState.coinsFound}/${levelState.coinsTotal}`;
+  document.getElementById('hbSteps').textContent = levelState.stepsLeft;
+  document.getElementById('hbPower').textContent = Math.floor(gameState.power);
+  document.getElementById('hbDiamonds').textContent = gameState.diamonds;
+  document.getElementById('hbScore').textContent = gameState.score;
+
+  const act = levelState.act;
+  const actBadge = document.getElementById('actBadge');
+  if (gameState.endlessModeActive) {
+    actBadge.className = 'act-badge act-endless';
+    actBadge.textContent = '♾ Endless';
+  } else {
+    actBadge.className = `act-badge act-${act}`;
+    actBadge.textContent = act === 3 ? `Akt ${act} 💀` : `Akt ${act}`;
+  }
+}
+
+function renderShovelDisplay() {
+  const shovel = SHOVELS[gameState.shovel];
+  document.getElementById('shovelDisplay').textContent =
+    `${shovel.icon} ${shovel.name} [${gameState.shovelDurability}/${SHOVELS[gameState.shovel].durability}]`;
+}
+
+function renderPotionButton() {
+  const btn = document.getElementById('potionBtn');
+  btn.disabled = gameState.diamonds < 1;
+}
+
+function renderMoundsList() {
+  const listEl = document.getElementById('moundsList');
+  const mounds = levelState.moundsDiscovered;
+
+  if (mounds.length === 0) {
+    listEl.innerHTML = '<div style="color:#666;font-size:7px;font-style:italic">Brak odkrytych kopców</div>';
+    document.getElementById('btnKop').disabled = true;
+    return;
+  }
+
+  listEl.innerHTML = '';
+  for (const idx of mounds) {
+    const cell = levelState.grid[idx];
+    const md = cell.moundData;
+    if (!md) continue;
+
+    const isSelected = levelState.selectedMoundIdx === idx;
+    const exhausted = md.exhausted;
+    const boss = md.boss;
+    const progress = `${md.currentLayer}/${md.totalLayers}`;
+
+    listEl.insertAdjacentHTML('beforeend', `
+      <div class="mound-item ${isSelected ? 'selected' : ''} ${exhausted ? 'exhausted' : ''}"
+           onclick="${exhausted ? '' : `selectMound(${idx})`}">
+        <span>${boss ? '💀' : (md.fake && md.exhausted ? '🐛' : '🏔')} ${md.id.replace('mound_', 'K')}${boss ? ' BOSS' : ''}</span>
+        <span style="font-size:7px;opacity:0.7">${progress} ${exhausted ? '✓' : ''}</span>
+      </div>
+    `);
+  }
+
+  // Przycisk KOP
+  const hasSelectedActive = levelState.selectedMoundIdx >= 0 &&
+    !levelState.grid[levelState.selectedMoundIdx]?.moundData?.exhausted;
+  document.getElementById('btnKop').disabled = !hasSelectedActive;
+}
+
+function renderInventory() {
+  const grid = document.getElementById('inventoryGrid');
+  const panelTitle = grid.previousElementSibling;
+  if (panelTitle) panelTitle.textContent = `🎒 Ekwipunek (${gameState.inventory.length}/${MAX_INVENTORY})`;
+
+  grid.innerHTML = '';
+
+  for (let i = 0; i < MAX_INVENTORY; i++) {
+    const inv = gameState.inventory[i];
+    if (inv) {
+      const def = ITEMS[inv.key];
+      grid.insertAdjacentHTML('beforeend', `
+        <div class="inv-slot" onclick="useItem(${i})" title="${def?.desc || ''}">
+          <span>${def?.icon || '?'}</span>
+          <span class="item-name">${def?.name?.substring(0, 8) || '?'}</span>
+          <span style="font-size:7px;color:#FFD700;position:absolute;bottom:2px;right:4px;">${inv.charges}</span>
+          <div class="tooltip">${def?.name}: ${def?.desc}</div>
+        </div>
+      `);
+    } else {
+      grid.insertAdjacentHTML('beforeend', `<div class="inv-slot empty"></div>`);
+    }
+  }
+}
+
+function renderFinishButton() {
+  const wrap = document.getElementById('finishBtnWrap');
+  if (levelState.canFinish && !levelState.levelComplete) {
+    wrap.classList.remove('hidden');
+  } else {
+    wrap.classList.add('hidden');
+  }
+}
+
+// =============================================================
+// SEKCJA 10: MODAL CONTROLLERS
+// =============================================================
+
+function openLevelEndModal(reason) {
+  const totalDiamonds = gameState.diamonds;
+  // Pozostałe kroki zamieniamy na monety (×10 jak normalna moneta)
+  const stepsBonus = levelState.stepsLeft * 10;
+  const coinsBonus = levelState.coinsFound * 10;
+  const fullClear = levelState.coinsFound === levelState.coinsTotal;
+  const fullClearBonus = fullClear ? 50 : 0;
+
+  gameState.score += stepsBonus + fullClearBonus;
+
+  maybeSaveHighScore();
+
+  const title = reason === 'timeout' ? '⏰ Czas minął – poziom zakończony' : '✅ POZIOM UKOŃCZONY!';
+  document.getElementById('levelEndTitle').textContent = title;
+
+  const scoresEl = document.getElementById('levelEndScores');
+  scoresEl.innerHTML = `
+    <div class="score-line"><span>Monety znalezione</span><span class="val">${levelState.coinsFound} × 10 = ${coinsBonus} pkt</span></div>
+    <div class="score-line"><span>🪙 Kroki → monety</span><span class="val">${levelState.stepsLeft} × 10 = ${stepsBonus} pkt</span></div>
+    ${fullClear ? `<div class="score-line"><span>Bonus: pełna plansza! 🏅</span><span class="val">+${fullClearBonus} pkt</span></div>` : ''}
+    <div class="score-line" style="border-top:2px solid #FFD700;margin-top:6px;padding-top:6px;">
+      <span><b>Łączny wynik:</b></span><span class="val" style="font-size:13px;">${gameState.score} pkt</span>
+    </div>
+    <div class="score-line"><span>Brylanty 💎</span><span class="val">${gameState.diamonds}</span></div>
+    <div class="score-line"><span>Moc ⚡ (bonus: +1 za przejście)</span><span class="val">${Math.floor(gameState.power)} → ${Math.floor(gameState.power) + 1}</span></div>
+  `;
+
+  const hsEl = document.getElementById('levelEndHighscore');
+  if (gameState.score >= gameState.highScore) {
+    hsEl.textContent = '🏆 Nowy rekord!';
+    hsEl.style.color = '#FFD700';
+  } else {
+    hsEl.textContent = `Rekord: ${gameState.highScore} pkt`;
+    hsEl.style.color = '#90EE90';
+  }
+
+  document.getElementById('levelEndModal').classList.remove('hidden');
+}
+
+function proceedAfterLevel() {
+  document.getElementById('levelEndModal').classList.add('hidden');
+  levelState.levelComplete = true;
+
+  // +1 moc za przejście poziomu
+  gameState.power += 1;
+  showStatus('⚡ +1 moc za przejście poziomu!');
+
+  // Sprawdź czy sklep
+  if (gameState.level % SHOP_INTERVAL === 0) {
+    shopState.waitingForTransition = true;
+    openShopModal();
+  } else {
+    gameState.level++;
+    startLevel(gameState.level);
+  }
+}
+
+function openGameOverModal(reason) {
+  maybeSaveHighScore();
+  gameState.gameOver = true;
+
+  document.getElementById('gameOverReason').textContent = reason;
+  document.getElementById('gameOverScore').textContent = `Wynik końcowy: ${gameState.score} pkt`;
+  document.getElementById('gameOverHS').textContent =
+    gameState.score >= gameState.highScore ? '🏆 Nowy rekord!' : `Rekord: ${gameState.highScore} pkt`;
+
+  document.getElementById('gameOverModal').classList.remove('hidden');
+
+  // Sprawdź Hall of Fame
+  if (hofQualifies(gameState.score)) {
+    setTimeout(() => openHoFNameInput(gameState.score, gameState.level), 600);
+  }
+}
+
+function restartGame() {
+  document.getElementById('gameOverModal').classList.add('hidden');
+  stopRainEffect();
+  initGame();
+  document.getElementById('startScreen').classList.remove('hidden');
+}
+
+// =============================================================
+// SEKCJA 11: INPUT HANDLERS
+// =============================================================
+
+function handleCanvasClick(e) {
+  if (levelState.levelComplete || gameState.gameOver) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const clickX = (e.clientX - rect.left) * scaleX;
+  const clickY = (e.clientY - rect.top) * scaleY;
+
+  const gs = levelState.gridSize;
+  const tx = Math.floor(clickX / TILE_SIZE);
+  const ty = Math.floor(clickY / TILE_SIZE);
+
+  if (tx < 0 || tx >= gs || ty < 0 || ty >= gs) return;
+
+  const idx = ty * gs + tx;
+  handleTileClick(idx);
+}
+
+function handleTileClick(idx) {
+  const cell = levelState.grid[idx];
+
+  // Jeśli kafelek już odkryty – nic nie rób (moundzie: zaznacz kopiec)
+  if (cell.revealed) {
+    if (cell.type === 'mound' || cell.type === 'fake_mound') {
+      selectMound(idx);
+    }
+    return;
+  }
+
+  // Sprawdź czy w ciemności
+  if (levelState.darknessMask.has(idx)) {
+    showStatus('🌑 Ten obszar jest zbyt ciemny! Odkryj sąsiedni kafelek.', 'warning');
+    return;
+  }
+
+  // Krok
+  if (levelState.stepsLeft <= 0) {
+    showStatus('⛔ Brak kroków!', 'danger');
+    return;
+  }
+
+  levelState.stepsLeft--;
+
+  // Poison vapor check
+  if (levelState.poisonActive) {
+    levelState.poisonStepCounter++;
+    if (levelState.poisonStepCounter >= 5) {
+      levelState.poisonStepCounter = 0;
+      gameState.power = Math.max(0, gameState.power - 1);
+      showStatus('☠ Trujące opary! Stracono 1 punkt mocy!', 'danger');
+    }
+  }
+
+  // Odkryj kafelek
+  cell.revealed = true;
+  updateDarknessMaskAfterReveal(idx);
+
+  const center = tileCenterXY(idx);
+
+  if (cell.type === 'coin') {
+    levelState.coinsFound++;
+    gameState.score += 10;
+    showStatus(`🪙 Moneta! +10 pkt (${levelState.coinsFound}/${levelState.coinsTotal})`);
+    spawnParticles('coin', center.x, center.y, 14);
+    checkLevelComplete();
+
+    // Kret-złodziej
+    checkMoleThief();
+
+  } else if (cell.type === 'mound' || cell.type === 'fake_mound') {
+    if (!levelState.moundsDiscovered.includes(idx)) {
+      levelState.moundsDiscovered.push(idx);
+    }
+    showStatus(`🏔 Odkryto kopiec! Kliknij "KOP" aby kopać.`);
+    if (levelState.selectedMoundIdx < 0) {
+      selectMound(idx);
+    }
+
+  } else {
+    // Pusta trawa
+    spawnParticles('dirt', center.x, center.y, 4);
+    showStatus('🌿 Pusta trawa...');
+  }
+
+  // Sprawdź czy skończyły się kroki
+  if (levelState.stepsLeft <= 0 && !levelState.levelComplete) {
+    setTimeout(() => {
+      if (levelState.coinsFound >= 3) {
+        openLevelEndModal('timeout');
+      } else {
+        openGameOverModal(`Zabrakło kroków! Znalazłeś tylko ${levelState.coinsFound}/3 wymagane monety.`);
+      }
+    }, 300);
+  }
+
+  renderMoundsList();
+  updateUI();
+}
+
+function selectMound(idx) {
+  const cell = levelState.grid[idx];
+  if (!cell || !cell.moundData) return;
+  if (cell.moundData.exhausted) {
+    showStatus('Ten kopiec jest już wyczerpany.', 'warning');
+    return;
+  }
+
+  levelState.selectedMoundIdx = idx;
+  renderMoundsList();
+
+  const md = cell.moundData;
+  showStatus(`🏔 Wybrano kopiec K${md.id.replace('mound_', '')}${md.boss ? ' (BOSS!)' : ''}. Kliknij KOP.`);
+}
+
+function handleKopClick() {
+  const idx = levelState.selectedMoundIdx;
+  if (idx < 0) { showStatus('Nie wybrano kopca!', 'warning'); return; }
+
+  const cell = levelState.grid[idx];
+  if (!cell || !cell.moundData) return;
+  if (cell.moundData.exhausted) { showStatus('Kopiec wyczerpany!', 'warning'); return; }
+
+  if (gameState.power < 1) {
+    showStatus('⚡ Brak mocy! Kup mikstury lub znajdź eliksir.', 'danger');
+    return;
+  }
+
+  openDigModal(idx);
+}
+
+function handleCanvasMouseMove(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  mouseX = (e.clientX - rect.left) * scaleX;
+  mouseY = (e.clientY - rect.top) * scaleY;
+}
+
+function handleCanvasMouseLeave() {
+  mouseX = -1;
+  mouseY = -1;
+}
+
+// =============================================================
+// SEKCJA 12: GAME LOOP (rAF – tylko rendering)
+// =============================================================
+
+function gameLoop(timestamp) {
+  const dt = timestamp - lastTime;
+  lastTime = timestamp;
+
+  tickParticles();
+  tickTweens(dt);
+  renderCanvas();
+
+  animFrameId = requestAnimationFrame(gameLoop);
+}
+
+// =============================================================
+// SEKCJA 13: INIT I BOOT
+// =============================================================
+
+function initGame() {
+  gameState = {
+    level: 1,
+    act: 1,
+    score: 0,
+    highScore: parseInt(localStorage.getItem('wrok_highscore') || '0'),
+    power: 3,
+    diamonds: 0,
+    shovel: 'basic',
+    shovelDurability: SHOVELS.basic.durability,
+    inventory: [],
+    endlessModeActive: false,
+    gameOver: false,
+  };
+
+  // Aktualizuj highscore na start screen
+  document.getElementById('hsDisplay').textContent = `Najlepszy wynik: ${gameState.highScore}`;
+}
+
+function startLevel(n) {
+  if (n > 12) {
+    gameState.endlessModeActive = true;
+  }
+
+  gameState.level = n;
+  gameState.act = getAct(n);
+
+  levelState = generateLevel(n);
+  levelState.act = gameState.act;
+
+  // Uruchom mechaniki aktów
+  setupActMechanics();
+
+  // Zaktualizuj rozmiar canvas
+  updateCanvasSize();
+
+  // Reset stanu kopania
+  digState = { moundIdx: -1, previewActive: false, lastResult: null };
+
+  // Reset UI
+  document.getElementById('digResults').innerHTML = '';
+  document.getElementById('digModal').classList.add('hidden');
+
+  // Uruchom pętlę jeśli nie działa
+  if (!animFrameId) {
+    lastTime = performance.now();
+    animFrameId = requestAnimationFrame(gameLoop);
+  }
+
+  // Aktualizuj UI
+  updateUI();
+  renderMoundsList();
+
+  // Wiadomość startowa
+  if (n === 1) {
+    showStatus('🌿 Poziom 1! Odkryj 3 monety by ukończyć poziom. Klikaj kafelki trawy!');
+  } else if (gameState.endlessModeActive) {
+    showStatus(`♾ Endless Mode! Poziom ${n} – coraz trudniej!`);
+  } else {
+    showStatus(`🆙 Poziom ${n}! Potrzebujesz 3 monet. Masz ${levelState.stepsMax} kroków.`);
+  }
+}
+
+function startGame() {
+  document.getElementById('startScreen').classList.add('hidden');
+  initGame();
+  startLevel(1);
+}
+
+function finishLevel() {
+  if (!levelState.canFinish) return;
+  levelState.levelComplete = true;
+  renderFinishButton();
+  stopRainEffect();
+  openLevelEndModal('finish');
+}
+
+function checkLevelComplete() {
+  if (levelState.coinsFound >= 3 && !levelState.canFinish) {
+    levelState.canFinish = true;
+    renderFinishButton();
+    showStatus('🏁 Masz 3 monety! Możesz zakończyć poziom lub szukać więcej!');
+  }
+}
+
+function maybeSaveHighScore() {
+  if (gameState.score > gameState.highScore) {
+    gameState.highScore = gameState.score;
+    localStorage.setItem('wrok_highscore', gameState.highScore);
+  }
+}
+
+function showStatus(msg, type) {
+  const bar = document.getElementById('statusBar');
+  let color = '#90EE90';
+  if (type === 'danger') color = '#FF6666';
+  else if (type === 'warning') color = '#FFD700';
+
+  bar.style.color = color;
+  bar.textContent = msg;
+
+  // Reset koloru po 3s
+  clearTimeout(bar._resetTimeout);
+  bar._resetTimeout = setTimeout(() => { bar.style.color = '#90EE90'; }, 3000);
+}
+
+// =============================================================
+// HALL OF FAME SYSTEM
+// Zapis: localStorage (automatyczny) + plik JSON (na żądanie)
+// Odczyt: localStorage przy starcie + import z pliku
+// =============================================================
+
+const HOF_MAX = 10;
+const HOF_STORAGE_KEY = 'wrok_hof';
+let hofData = []; // [{rank, name, score, level, date}]
+// Tymczasowe dane dla modalu wpisywania imienia
+let hofPendingEntry = null;
+
+function loadHoF() {
+  try {
+    const raw = localStorage.getItem(HOF_STORAGE_KEY);
+    hofData = raw ? JSON.parse(raw) : [];
+  } catch(e) {
+    hofData = [];
+  }
+}
+
+function saveHoFToStorage() {
+  try {
+    localStorage.setItem(HOF_STORAGE_KEY, JSON.stringify(hofData));
+  } catch(e) {}
+}
+
+function hofQualifies(score) {
+  if (score <= 0) return false;
+  if (hofData.length < HOF_MAX) return true;
+  return score > hofData[hofData.length - 1].score;
+}
+
+function addHoFEntry(name, score, level) {
+  const date = new Date().toLocaleDateString('pl-PL');
+  hofData.push({ name: name.trim() || 'Anonim', score, level, date });
+  // Sortuj malejąco po score
+  hofData.sort((a, b) => b.score - a.score);
+  // Ogranicz do top 10
+  if (hofData.length > HOF_MAX) hofData.length = HOF_MAX;
+  saveHoFToStorage();
+}
+
+// Eksport do pliku JSON (pobieranie)
+function exportHoFFile() {
+  const payload = JSON.stringify(hofData, null, 2);
+  const blob = new Blob([payload], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'wrok_hof.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showStatus('💾 Hall of Fame zapisany jako wrok_hof.json');
+}
+
+// Import z pliku JSON
+function importHoFFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      if (!Array.isArray(parsed)) throw new Error('Nieprawidłowy format');
+      // Scal z istniejącymi, deduplikuj po name+score, ogranicz do top 10
+      const merged = [...hofData, ...parsed];
+      merged.sort((a, b) => b.score - a.score);
+      // Deduplikacja – zostawiamy unikalne wpisy
+      const seen = new Set();
+      hofData = merged.filter(e => {
+        const key = `${e.name}|${e.score}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      if (hofData.length > HOF_MAX) hofData.length = HOF_MAX;
+      saveHoFToStorage();
+      renderHoFTable();
+      showStatus('📂 Hall of Fame wczytany z pliku!');
+    } catch(err) {
+      showStatus('❌ Błąd wczytywania pliku HoF!', 'danger');
+    }
+    // Wyczyść input żeby to samo plik można było wczytać ponownie
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function openHoFModal() {
+  renderHoFTable();
+  document.getElementById('hofModal').classList.remove('hidden');
+}
+
+function closeHoFModal() {
+  document.getElementById('hofModal').classList.add('hidden');
+}
+
+function renderHoFTable(highlightScore) {
+  const el = document.getElementById('hofTable');
+  if (hofData.length === 0) {
+    el.innerHTML = '<p style="text-align:center;color:#666;font-size:8px;padding:20px;">Brak wyników. Zagraj i zostaw swój ślad!</p>';
+    return;
+  }
+
+  const medals = ['🥇','🥈','🥉'];
+  const rows = hofData.map((e, i) => {
+    const isNew = highlightScore !== undefined && e.score === highlightScore;
+    const medal = medals[i] || `${i + 1}.`;
+    return `<tr class="${isNew ? 'hof-new-entry' : ''}">
+      <td class="rank">${medal}</td>
+      <td>${escapeHtml(e.name)}</td>
+      <td style="color:#FFD700;">${e.score}</td>
+      <td>Poz. ${e.level}</td>
+      <td style="color:#666;">${e.date || ''}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <table class="hof-table">
+      <thead><tr>
+        <th>#</th><th>Imię</th><th>Wynik</th><th>Poziom</th><th>Data</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Otwiera modal wpisywania imienia po kwalifikacji
+function openHoFNameInput(score, level) {
+  hofPendingEntry = { score, level };
+  document.getElementById('hofNameScore').textContent =
+    `Twój wynik: ${score} pkt | Poziom ${level}`;
+  document.getElementById('hofNameInput').value = '';
+  document.getElementById('hofNameModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('hofNameInput').focus(), 100);
+}
+
+function confirmHoFEntry() {
+  if (!hofPendingEntry) return;
+  const name = document.getElementById('hofNameInput').value.trim() || 'Anonim';
+  addHoFEntry(name, hofPendingEntry.score, hofPendingEntry.level);
+  hofPendingEntry = null;
+  document.getElementById('hofNameModal').classList.add('hidden');
+  // Pokaż HoF z podświetleniem nowego wpisu
+  openHoFModal();
+  renderHoFTable(hofData[0]?.score); // podświetl najwyższy (właśnie dodany)
+  showStatus(`🏆 ${name} zapisany w Hall of Fame!`);
+}
+
+function closeHoFNameModal() {
+  hofPendingEntry = null;
+  document.getElementById('hofNameModal').classList.add('hidden');
+}
+
+// =============================================================
+// INICJALIZACJA CANVAS I EVENTÓW
+// =============================================================
+
+window.addEventListener('DOMContentLoaded', () => {
+  canvas = document.getElementById('gameCanvas');
+  ctx = canvas.getContext('2d');
+
+  digCanvas = document.getElementById('digCanvas');
+  digCtx = digCanvas.getContext('2d');
+
+  canvas.addEventListener('click', handleCanvasClick);
+  canvas.addEventListener('mousemove', handleCanvasMouseMove);
+  canvas.addEventListener('mouseleave', handleCanvasMouseLeave);
+
+  // Zamknij modal klawiszem Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeDigModal();
+    }
+  });
+
+  // Responsywność canvas
+  window.addEventListener('resize', () => {
+    updateCanvasSize();
+  });
+
+  // Wczytaj Hall of Fame z localStorage
+  loadHoF();
+
+  // Wstępny render start screena (animacja logo)
+  initGame();
+});
+
+// =============================================================
+// GOTOWA GRA – KRETOSFERA
+// Jak uruchomić: Otwórz plik index.html w dowolnej nowoczesnej
+// przeglądarce (Chrome, Firefox, Edge, Safari).
+// Nie wymaga serwera – działa bezpośrednio z pliku.
+// Sterowanie: Mysz (kliknięcia), Escape (zamknij modal)
+// =============================================================
+</script>
+</body>
+</html>
