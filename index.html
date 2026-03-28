@@ -528,6 +528,111 @@
       from { transform: translateY(-100%); }
       to { transform: translateY(110vh); }
     }
+
+    /* =============================================
+       RESPONSIVE – MOBILE (≤640px)
+       ============================================= */
+    @media (max-width: 640px) {
+      body { overflow-y: auto; }
+
+      /* Topbar: kompaktowy, mniejsza czcionka */
+      #topbar { padding: 5px 8px; gap: 4px; }
+      .stat-badge { font-size: 7px; padding: 3px 6px; gap: 2px; }
+      .stat-badge .val { font-size: 9px; }
+
+      /* Główny obszar: canvas na górze, panel pod spodem */
+      #mainArea { flex-direction: column !important; overflow: visible; }
+
+      #canvasWrap {
+        min-height: unset;
+        flex: 0 0 auto;
+        padding: 6px;
+      }
+
+      /* Canvas: nie wychodź poza ekran */
+      #gameCanvas { max-width: calc(100vw - 12px); max-height: 52vw; }
+
+      /* Prawy panel: pełna szerokość, poziome grupy */
+      #rightPanel {
+        width: 100% !important;
+        min-width: unset !important;
+        border-left: none;
+        border-top: 3px solid #4a9240;
+        flex-direction: row;
+        flex-wrap: wrap;
+        max-height: none;
+        padding: 8px;
+        gap: 6px;
+        overflow-y: visible;
+      }
+
+      /* Sekcje panelu jako karty obok siebie */
+      #rightPanel > div {
+        flex: 1 1 140px;
+        min-width: 130px;
+      }
+
+      /* Ekwipunek: 6 kolumn na mobile */
+      #inventoryGrid { grid-template-columns: repeat(6, 1fr); }
+      .inv-slot { min-height: 40px; font-size: 16px; }
+      .inv-slot .item-name { display: none; }
+
+      /* Przyciski: większy tap target */
+      .btn-primary { padding: 10px 12px; font-size: 8px; min-height: 40px; }
+      .btn-finish { padding: 14px; font-size: 10px; }
+
+      /* Status bar */
+      #statusBar { font-size: 7px; padding: 5px 10px; }
+
+      /* Modals: pełna szerokość, mniejszy padding */
+      .modal-box { padding: 14px; margin: 4px; }
+      .modal-title { font-size: 11px; }
+
+      /* Przycisk KOP: zawsze widoczny */
+      #btnKop { min-height: 44px; font-size: 9px; }
+
+      /* Przycisk łącz folder */
+      #potionBtn { font-size: 7px; padding: 8px 6px; }
+
+      /* Finish button wrap: pełna szerokość */
+      #finishBtnWrap { flex: 1 1 100% !important; }
+
+      /* Dig canvas */
+      #digCanvas { width: 100% !important; height: auto !important; }
+
+      /* Start screen */
+      .game-logo { font-size: 36px; }
+      .game-subtitle { font-size: 8px; }
+      .start-btn { font-size: 11px; padding: 12px 24px; }
+
+      /* Shop / HoF karty */
+      .shop-item-card { flex-wrap: wrap; gap: 6px; }
+      .hof-table th, .hof-table td { font-size: 7px; padding: 4px 5px; }
+
+      /* Shovel display */
+      #shovelDisplay { font-size: 7px; }
+
+      /* Mound items */
+      .mound-item { font-size: 7px; padding: 5px 6px; }
+      .panel-title { font-size: 7px; }
+    }
+
+    /* Landscape mobile */
+    @media (max-width: 900px) and (orientation: landscape) {
+      #mainArea { flex-direction: row !important; }
+      #rightPanel {
+        width: 200px !important;
+        min-width: 180px !important;
+        border-left: 3px solid #4a9240;
+        border-top: none;
+        flex-direction: column;
+        flex-wrap: nowrap;
+        max-height: calc(100vh - 80px);
+        overflow-y: auto;
+      }
+      #inventoryGrid { grid-template-columns: repeat(3, 1fr); }
+      .inv-slot .item-name { display: block; }
+    }
   </style>
 </head>
 <body class="flex flex-col min-h-screen">
@@ -548,6 +653,7 @@
     Znajdź 3 monety by ukończyć poziom.<br>
     Kop kopce kretów by zdobywać brylanty!
   </div>
+  <div id="buildDisplay" style="color:#333;font-size:6px;margin-top:8px;letter-spacing:1px;"></div>
 </div>
 
 <!-- ============================================ -->
@@ -575,7 +681,7 @@
 <!-- ============================================ -->
 <!-- MAIN AREA -->
 <!-- ============================================ -->
-<div style="display:flex;flex:1;overflow:hidden;">
+<div id="mainArea" style="display:flex;flex:1;overflow:hidden;">
 
   <!-- Canvas (park grid) -->
   <div id="canvasWrap">
@@ -751,6 +857,11 @@
 </div>
 
 <script>
+// =============================================================
+// WERSJA BUILDU
+// =============================================================
+const BUILD_VERSION = '2026-03-28 15:42';
+
 // =============================================================
 // SEKCJA 1: STAŁE I KATALOGI
 // =============================================================
@@ -1018,13 +1129,24 @@ function randomItemKey() {
 
 function updateCanvasSize() {
   if (!canvas) return;
+  const isMobile  = window.innerWidth <= 640;
+  const isLandscape = window.innerWidth > window.innerHeight;
   const wrap = document.getElementById('canvasWrap');
-  const availW = wrap.clientWidth - 20;
-  const availH = wrap.clientHeight - 20;
-  const gs = levelState.gridSize;
-  TILE_SIZE = Math.max(24, Math.min(80, Math.floor(Math.min(availW, availH) / gs)));
+  let availW, availH;
 
-  canvas.width = gs * TILE_SIZE;
+  if (isMobile && !isLandscape) {
+    // Portrait mobile: canvas dostaje ~54% wysokości ekranu
+    availW = window.innerWidth - 16;
+    availH = window.innerHeight * 0.52;
+  } else {
+    availW = wrap.clientWidth  - 16;
+    availH = wrap.clientHeight - 16;
+  }
+
+  const gs = levelState.gridSize;
+  TILE_SIZE = Math.max(20, Math.min(80, Math.floor(Math.min(availW, availH) / gs)));
+
+  canvas.width  = gs * TILE_SIZE;
   canvas.height = gs * TILE_SIZE;
 }
 
@@ -2912,17 +3034,35 @@ window.addEventListener('DOMContentLoaded', () => {
   canvas.addEventListener('mousemove', handleCanvasMouseMove);
   canvas.addEventListener('mouseleave', handleCanvasMouseLeave);
 
+  // Obsługa dotyku – mapuj tap na click z poprawną pozycją
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault(); // blokuj scroll pod canvas
+    const touch = e.touches[0];
+    handleCanvasClick({
+      clientX: touch.clientX,
+      clientY: touch.clientY,
+    });
+  }, { passive: false });
+
+  // Hover na touch – czyść po dotknięciu
+  canvas.addEventListener('touchend', () => {
+    mouseX = -1; mouseY = -1;
+  }, { passive: true });
+
   // Zamknij modal klawiszem Escape
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      closeDigModal();
-    }
+    if (e.key === 'Escape') closeDigModal();
   });
 
-  // Responsywność canvas
-  window.addEventListener('resize', () => {
-    updateCanvasSize();
+  // Responsywność canvas (resize + orientacja)
+  window.addEventListener('resize', () => updateCanvasSize());
+  window.addEventListener('orientationchange', () => {
+    setTimeout(updateCanvasSize, 200); // poczekaj na zakończenie rotacji
   });
+
+  // Pokaż wersję buildu na stronie głównej
+  const bv = document.getElementById('buildDisplay');
+  if (bv) bv.textContent = `v ${BUILD_VERSION}`;
 
   // Wczytaj Hall of Fame (localStorage + plik jeśli folder połączony)
   loadHoF().then(() => {
