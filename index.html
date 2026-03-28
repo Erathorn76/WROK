@@ -701,15 +701,15 @@
 <div id="hofModal" class="modal-overlay hidden" style="z-index:400;">
   <div class="modal-box" style="max-width:500px;">
     <div class="modal-title">🏆 HALL OF FAME – TOP 10</div>
-    <div id="hofFileStatus" style="text-align:center;font-size:7px;color:#666;margin-bottom:6px;"></div>
+    <div id="hofFileStatus" style="text-align:center;font-size:7px;padding:4px 8px;margin-bottom:6px;
+         background:rgba(0,0,0,0.3);border-radius:4px;color:#90EE90;"></div>
     <div id="hofTable" style="margin:12px 0;"></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
-      <button class="btn-primary" onclick="exportHoFFile()" style="flex:1;">💾 Zapisz plik</button>
-      <label class="btn-primary" style="flex:1;cursor:pointer;text-align:center;">
-        📂 Wczytaj plik
-        <input type="file" id="hofFileInput" accept=".json" style="display:none" onchange="importHoFFile(event)">
-      </label>
-      <button class="btn-primary" onclick="closeHoFModal()" style="flex:0.6;">✖ Zamknij</button>
+      <button class="btn-primary" onclick="linkGameFolder()" style="flex:1;">📁 Połącz folder gry</button>
+      <button class="btn-primary" onclick="closeHoFModal()" style="flex:0.5;">✖ Zamknij</button>
+    </div>
+    <div style="font-size:7px;color:#555;margin-top:6px;text-align:center;">
+      Wskaż raz folder z index.html – potem zapis i odczyt jest automatyczny
     </div>
   </div>
 </div>
@@ -2631,85 +2631,182 @@ function showStatus(msg, type) {
 
 // =============================================================
 // HALL OF FAME SYSTEM
-// Zapis: localStorage (automatyczny) + plik JSON (File System
-//        Access API jeśli dostępne, fallback: auto-download)
-// Odczyt: localStorage przy starcie + import z pliku
+// Zapis / odczyt: wrok_hof.json w folderze gry
+//   - File System Access API + IndexedDB (Chrome/Edge)
+//   - Fallback: localStorage (Firefox i inne)
+// Użytkownik wskazuje folder JEDEN raz – potem wszystko auto.
 // =============================================================
 
-const HOF_MAX = 10;
-const HOF_STORAGE_KEY = 'wrok_hof';
-let hofData = [];
-let hofPendingEntry = null;
-// Uchwyt do pliku (File System Access API) – trzymany w pamięci sesji
-let hofFileHandle = null;
+const HOF_MAX       = 10;
+const HOF_LS_KEY    = 'wrok_hof';
+const HOF_FILENAME  = 'wrok_hof.json';
+const IDB_DB        = 'wrok_idb';
+const IDB_STORE     = 'handles';
+const IDB_DIR_KEY   = 'gameDir';
 
-function loadHoF() {
-  try {
-    const raw = localStorage.getItem(HOF_STORAGE_KEY);
-    hofData = raw ? JSON.parse(raw) : [];
-  } catch(e) {
-    hofData = [];
-  }
+let hofData        = [];
+let hofPendingEntry = null;
+let hofDirHandle   = null; // FileSystemDirectoryHandle, trzymany w RAM sesji
+
+// ---- IndexedDB helpers (tylko do przechowywania FileSystemDirectoryHandle) ----
+
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(IDB_DB, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE);
+    req.onsuccess  = e => res(e.target.result);
+    req.onerror    = () => rej(req.error);
+  });
 }
 
-function saveHoFToStorage() {
+async function idbGet(key) {
   try {
-    localStorage.setItem(HOF_STORAGE_KEY, JSON.stringify(hofData));
+    const db = await idbOpen();
+    return await new Promise((res) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const r  = tx.objectStore(IDB_STORE).get(key);
+      r.onsuccess = () => res(r.result ?? null);
+      r.onerror   = () => res(null);
+    });
+  } catch(e) { return null; }
+}
+
+async function idbSet(key, value) {
+  try {
+    const db = await idbOpen();
+    await new Promise((res) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(value, key);
+      tx.oncomplete = res;
+      tx.onerror    = res;
+    });
   } catch(e) {}
 }
 
-// Zapis do pliku – File System Access API lub fallback download
-async function persistHoFToFile() {
-  const payload = JSON.stringify(hofData, null, 2);
+// ---- localStorage fallback ----
 
-  // Jeśli mamy już uchwyt do pliku (z wcześniejszego showSaveFilePicker) – nadpisz
-  if (hofFileHandle) {
-    try {
-      const writable = await hofFileHandle.createWritable();
-      await writable.write(payload);
-      await writable.close();
-      setHoFFileStatus(`💾 Zapisano: ${hofFileHandle.name}`);
-      return;
-    } catch(e) {
-      // Uchwyt przestał działać – zresetuj i spróbuj od nowa
-      hofFileHandle = null;
-    }
-  }
-
-  // Pierwsza próba zapisu – pokaż dialog wyboru pliku (wymaga gestu użytkownika)
-  if (window.showSaveFilePicker) {
-    try {
-      hofFileHandle = await window.showSaveFilePicker({
-        suggestedName: 'wrok_hof.json',
-        types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
-      });
-      const writable = await hofFileHandle.createWritable();
-      await writable.write(payload);
-      await writable.close();
-      setHoFFileStatus(`💾 Plik: ${hofFileHandle.name}`);
-      return;
-    } catch(e) {
-      // Użytkownik anulował dialog – fallback na download
-      hofFileHandle = null;
-    }
-  }
-
-  // Fallback: auto-download
-  triggerHoFDownload(payload);
+function loadHoFFromStorage() {
+  try {
+    const raw = localStorage.getItem(HOF_LS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) { return []; }
 }
 
-function triggerHoFDownload(payload) {
-  const blob = new Blob([payload || JSON.stringify(hofData, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'wrok_hof.json';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  setHoFFileStatus('💾 Pobrano: wrok_hof.json');
+function saveHoFToStorage() {
+  try { localStorage.setItem(HOF_LS_KEY, JSON.stringify(hofData)); } catch(e) {}
 }
+
+// ---- Plik w folderze gry ----
+
+async function readHoFFromDir() {
+  if (!hofDirHandle) return [];
+  try {
+    const fh   = await hofDirHandle.getFileHandle(HOF_FILENAME, { create: false });
+    const file = await fh.getFile();
+    const text = await file.text();
+    return JSON.parse(text);
+  } catch(e) { return []; } // plik jeszcze nie istnieje – ok
+}
+
+async function writeHoFToDir() {
+  if (!hofDirHandle) return false;
+  try {
+    const fh       = await hofDirHandle.getFileHandle(HOF_FILENAME, { create: true });
+    const writable = await fh.createWritable();
+    await writable.write(JSON.stringify(hofData, null, 2));
+    await writable.close();
+    setHoFFileStatus(`✅ Zapisano: ${HOF_FILENAME} (${hofDirHandle.name})`);
+    return true;
+  } catch(e) {
+    setHoFFileStatus('⚠ Błąd zapisu – sprawdź uprawnienia do folderu');
+    return false;
+  }
+}
+
+// Scala dwie listy, sortuje, deduplikuje, przycina do HOF_MAX
+function mergeHoF(a, b) {
+  const all  = [...a, ...b];
+  all.sort((x, y) => y.score - x.score);
+  const seen = new Set();
+  return all.filter(e => {
+    const k = `${e.name}|${e.score}|${e.date}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  }).slice(0, HOF_MAX);
+}
+
+// ---- Init – wywoływane przy starcie strony ----
+
+async function loadHoF() {
+  // Zawsze zaczynamy od localStorage
+  hofData = loadHoFFromStorage();
+
+  if (!window.showDirectoryPicker) {
+    // Przeglądarka bez File System Access API – tylko localStorage
+    setHoFFileStatus('ℹ Dane w przeglądarce (localStorage) – Firefox nie obsługuje zapisu do pliku');
+    return;
+  }
+
+  // Spróbuj przywrócić handle z IndexedDB
+  const stored = await idbGet(IDB_DIR_KEY);
+  if (!stored) {
+    setHoFFileStatus('📁 Kliknij "Połącz folder gry" aby włączyć auto-zapis do pliku');
+    return;
+  }
+
+  // Sprawdź/poproś o uprawnienia do odczytu+zapisu
+  try {
+    let perm = await stored.queryPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') {
+      perm = await stored.requestPermission({ mode: 'readwrite' });
+    }
+    if (perm !== 'granted') {
+      setHoFFileStatus('⚠ Brak uprawnień do folderu – kliknij "Połącz folder gry"');
+      return;
+    }
+    hofDirHandle = stored;
+    // Odczytaj plik i scal z localStorage
+    const fromFile = await readHoFFromDir();
+    if (fromFile.length) {
+      hofData = mergeHoF(hofData, fromFile);
+      saveHoFToStorage();
+    }
+    setHoFFileStatus(`✅ Folder połączony: ${stored.name}  |  plik: ${HOF_FILENAME}`);
+  } catch(e) {
+    setHoFFileStatus('📁 Kliknij "Połącz folder gry" aby włączyć auto-zapis do pliku');
+  }
+}
+
+// Wywoływane po kliknięciu przycisku "Połącz folder gry"
+async function linkGameFolder() {
+  if (!window.showDirectoryPicker) {
+    setHoFFileStatus('⚠ Twoja przeglądarka nie obsługuje File System Access API');
+    return;
+  }
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    hofDirHandle = handle;
+    await idbSet(IDB_DIR_KEY, handle);
+
+    // Odczytaj istniejący plik jeśli jest
+    const fromFile = await readHoFFromDir();
+    if (fromFile.length) {
+      hofData = mergeHoF(hofData, fromFile);
+      saveHoFToStorage();
+    }
+    // Zapisz aktualny stan
+    await writeHoFToDir();
+    showStatus(`📁 Folder "${handle.name}" połączony! HoF zapisywany automatycznie.`);
+    renderHoFTable();
+  } catch(e) {
+    if (e.name !== 'AbortError') {
+      setHoFFileStatus('⚠ Nie udało się połączyć folderu');
+    }
+  }
+}
+
+// ---- Podstawowe operacje na danych ----
 
 function setHoFFileStatus(msg) {
   const el = document.getElementById('hofFileStatus');
@@ -2722,58 +2819,19 @@ function hofQualifies(score) {
   return score > hofData[hofData.length - 1].score;
 }
 
-function addHoFEntry(name, score, level) {
+async function addHoFEntry(name, score, level) {
   const date = new Date().toLocaleDateString('pl-PL');
   hofData.push({ name: name.trim() || 'Anonim', score, level, date });
   hofData.sort((a, b) => b.score - a.score);
   if (hofData.length > HOF_MAX) hofData.length = HOF_MAX;
   saveHoFToStorage();
+  await writeHoFToDir(); // automatyczny zapis do pliku (no-op jeśli brak handle)
 }
 
-// Przycisk "Zapisz plik" w modalu HoF – zawsze triggeruje zapis
-function exportHoFFile() {
-  persistHoFToFile();
-}
-
-// Import z pliku JSON
-function importHoFFile(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try {
-      const parsed = JSON.parse(e.target.result);
-      if (!Array.isArray(parsed)) throw new Error('Nieprawidłowy format');
-      const merged = [...hofData, ...parsed];
-      merged.sort((a, b) => b.score - a.score);
-      const seen = new Set();
-      hofData = merged.filter(entry => {
-        const key = `${entry.name}|${entry.score}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-      if (hofData.length > HOF_MAX) hofData.length = HOF_MAX;
-      saveHoFToStorage();
-      renderHoFTable();
-      showStatus('📂 Hall of Fame wczytany z pliku!');
-    } catch(err) {
-      showStatus('❌ Błąd wczytywania pliku HoF!', 'danger');
-    }
-    event.target.value = '';
-  };
-  reader.readAsText(file);
-}
+// ---- Modals ----
 
 function openHoFModal() {
   renderHoFTable();
-  if (hofFileHandle) {
-    setHoFFileStatus(`💾 Plik: ${hofFileHandle.name}`);
-  } else if (window.showSaveFilePicker) {
-    setHoFFileStatus('Nie wybrano pliku – kliknij "Zapisz plik" aby wybrać lokalizację');
-  } else {
-    setHoFFileStatus('Zapis: auto-pobieranie wrok_hof.json');
-  }
   document.getElementById('hofModal').classList.remove('hidden');
 }
 
@@ -2788,59 +2846,47 @@ function renderHoFTable(highlightScore) {
     el.innerHTML = '<p style="text-align:center;color:#666;font-size:8px;padding:20px;">Brak wyników. Zagraj i zostaw swój ślad!</p>';
     return;
   }
-
   const medals = ['🥇','🥈','🥉'];
   const rows = hofData.map((e, i) => {
     const isNew = highlightScore !== undefined && e.score === highlightScore &&
                   i === hofData.findIndex(x => x.score === highlightScore);
-    const medal = medals[i] || `${i + 1}.`;
     return `<tr class="${isNew ? 'hof-new-entry' : ''}">
-      <td class="rank">${medal}</td>
+      <td class="rank">${medals[i] || (i + 1) + '.'}</td>
       <td>${escapeHtml(e.name)}</td>
       <td style="color:#FFD700;">${e.score}</td>
       <td>Poz. ${e.level}</td>
       <td style="color:#666;">${e.date || ''}</td>
     </tr>`;
   }).join('');
-
   el.innerHTML = `
     <table class="hof-table">
-      <thead><tr>
-        <th>#</th><th>Imię</th><th>Wynik</th><th>Poziom</th><th>Data</th>
-      </tr></thead>
+      <thead><tr><th>#</th><th>Imię</th><th>Wynik</th><th>Poziom</th><th>Data</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 }
 
 function escapeHtml(str) {
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function openHoFNameInput(score, level) {
   hofPendingEntry = { score, level };
-  document.getElementById('hofNameScore').textContent =
-    `Twój wynik: ${score} pkt | Poziom ${level}`;
+  document.getElementById('hofNameScore').textContent = `Twój wynik: ${score} pkt | Poziom ${level}`;
   document.getElementById('hofNameInput').value = '';
   document.getElementById('hofNameModal').classList.remove('hidden');
   setTimeout(() => document.getElementById('hofNameInput').focus(), 150);
 }
 
-function confirmHoFEntry() {
+async function confirmHoFEntry() {
   if (!hofPendingEntry) return;
-  const name = document.getElementById('hofNameInput').value.trim() || 'Anonim';
+  const name        = document.getElementById('hofNameInput').value.trim() || 'Anonim';
   const { score, level } = hofPendingEntry;
-  addHoFEntry(name, score, level);
-  hofPendingEntry = null;
+  hofPendingEntry   = null;
   document.getElementById('hofNameModal').classList.add('hidden');
 
-  // Automatyczny zapis do pliku
-  persistHoFToFile();
+  await addHoFEntry(name, score, level); // zapisuje do localStorage + pliku
 
-  // Pokaż HoF z podświetleniem nowego wpisu
   openHoFModal();
   renderHoFTable(score);
   showStatus(`🏆 ${escapeHtml(name)} zapisany w Hall of Fame!`);
@@ -2878,8 +2924,11 @@ window.addEventListener('DOMContentLoaded', () => {
     updateCanvasSize();
   });
 
-  // Wczytaj Hall of Fame z localStorage
-  loadHoF();
+  // Wczytaj Hall of Fame (localStorage + plik jeśli folder połączony)
+  loadHoF().then(() => {
+    document.getElementById('hsDisplay').textContent =
+      `Najlepszy wynik: ${hofData.length ? hofData[0].score : 0}`;
+  });
 
   // Wstępny render start screena (animacja logo)
   initGame();
